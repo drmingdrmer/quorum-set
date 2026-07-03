@@ -28,6 +28,9 @@ prove that a read tree and a write tree have the required cross-intersection
 property. The caller is responsible for building compatible read and write
 trees.
 
+Construction rejects invalid rules: `QuorumTree::new` returns an error on a
+duplicate child node or on a `quorum_size` larger than the number of children.
+
 ## Usage
 
 ```rust
@@ -37,13 +40,13 @@ let read_quorum = QuorumTree::new(1, [
     Node::Id(1),
     Node::Id(2),
     Node::Id(3),
-]);
+]).unwrap();
 
 let write_quorum = QuorumTree::new(3, [
     Node::Id(1),
     Node::Id(2),
     Node::Id(3),
-]);
+]).unwrap();
 
 assert!(read_quorum.is_quorum(&[1]));
 assert!(!write_quorum.is_quorum(&[1, 2]));
@@ -63,7 +66,7 @@ let read_quorum = QuorumTree::new(2, [
     Node::Id(1),
     Node::Id(2),
     Node::Id(3),
-]);
+]).unwrap();
 
 let write_quorum = read_quorum.clone();
 
@@ -87,13 +90,13 @@ fn id(i: u64) -> Node<u64> {
 }
 
 fn group(nodes: [u64; 3]) -> Node<u64> {
-    Node::Subtree(QuorumTree::new(2, nodes.into_iter().map(id)))
+    Node::Subtree(QuorumTree::new(2, nodes.into_iter().map(id)).unwrap())
 }
 
 let write_quorum = QuorumTree::new(2, [
     group([1, 2, 3]),
     group([4, 5, 6]),
-]);
+]).unwrap();
 
 assert!(write_quorum.is_quorum(&[1, 2, 4, 5]));
 assert!(!write_quorum.is_quorum(&[1, 2, 4]));

@@ -5,6 +5,7 @@ use std::hash::Hasher;
 
 use crate::CanonicalId;
 use crate::Node;
+use crate::QuorumTreeError;
 use crate::quorum_tree_spec::QuorumTreeSpec;
 
 mod impl_display;
@@ -22,8 +23,9 @@ mod impl_display;
 /// # Invariants
 ///
 /// - A [`QuorumTree`] represents exactly one quorum rule.
-/// - Child nodes are stored in a `BTreeSet`, so duplicate nodes are removed and traversal order is
-///   deterministic according to [`Node`] ordering.
+/// - Child nodes are unique and traversal order is deterministic according to [`Node`] ordering.
+/// - `quorum_size` never exceeds the number of child nodes: construction rejects duplicate children
+///   and unsatisfiable quorum sizes.
 /// - Equality and ordering for [`QuorumTree`] are based only on its canonical ID.
 /// - Canonical IDs are stable identifiers. [`std::fmt::Display`] is human-readable output and is
 ///   not a serialization format.
@@ -43,30 +45,45 @@ where ID: Ord
     ///
     /// `quorum_size` is the number of child nodes that must be selected for this
     /// tree to be selected. A child can be a single ID or another quorum tree.
+    /// If `quorum_size` is `0`, every input satisfies the tree.
     ///
-    /// Duplicate child nodes are removed. If `quorum_size` is `0`, every input
-    /// satisfies the tree. If `quorum_size` is greater than the number of unique
-    /// child nodes, no input can satisfy the tree.
+    /// # Errors
+    ///
+    /// - [`QuorumTreeError::DuplicateChild`]: a child was given more than once. A duplicate child
+    ///   is always an upstream bug; a quorum rule never contains the same member twice.
+    /// - [`QuorumTreeError::UnsatisfiableQuorum`]: `quorum_size` exceeds the number of child nodes,
+    ///   so no input could satisfy the tree.
     ///
     /// # Examples
     ///
     /// ```
-    /// use quorum_tree::{Node, QuorumTree};
+    /// use quorum_tree::{Node, QuorumTree, QuorumTreeError};
     ///
     /// let tree = QuorumTree::new(2, [
     ///     Node::Id(1),
     ///     Node::Id(2),
     ///     Node::Id(3),
-    /// ]);
+    /// ]).unwrap();
     ///
     /// assert!(tree.is_quorum(&[1, 2]));
     /// assert!(!tree.is_quorum(&[1]));
+    ///
+    /// let err = QuorumTree::new(1, [Node::Id(1), Node::Id(1)]).unwrap_err();
+    /// assert_eq!(
+    ///     QuorumTreeError::DuplicateChild { canonical_id: "Id=1".to_string() },
+    ///     err
+    /// );
     /// ```
-    pub fn new(quorum_size: u64, nodes: impl IntoIterator<Item = Node<ID>>) -> Self
-    where ID: CanonicalId {
-        let spec = QuorumTreeSpec::new(quorum_size, nodes);
+    pub fn new(
+        quorum_size: u64,
+        nodes: impl IntoIterator<Item = Node<ID>>,
+    ) -> Result<Self, QuorumTreeError>
+    where
+        ID: CanonicalId,
+    {
+        let spec = QuorumTreeSpec::new(quorum_size, nodes)?;
         let canonical_id = spec.canonical_id();
-        Self { spec, canonical_id }
+        Ok(Self { spec, canonical_id })
     }
 
     /// Returns the number of selected child nodes required to satisfy this
@@ -77,8 +94,7 @@ where ID: Ord
 
     /// Returns this tree's child nodes in canonical order.
     ///
-    /// Duplicate children are removed when the tree is built, so each returned
-    /// child is unique.
+    /// Children are unique: construction rejects duplicate child nodes.
     pub fn children(&self) -> impl Iterator<Item = &Node<ID>> {
         self.spec.children()
     }
@@ -155,16 +171,17 @@ mod tests {
 
     use crate::Node;
     use crate::QuorumTree;
+    use crate::QuorumTreeError;
 
     fn id(i: u64) -> Node<u64> {
         Node::Id(i)
     }
 
     #[test]
-    fn test_eq_ignores_construction_order_and_duplicates() {
-        let a = QuorumTree::new(2, [id(1), id(2), id(3)]);
-        let b = QuorumTree::new(2, [id(3), id(1), id(2), id(2)]);
-        let c = QuorumTree::new(3, [id(1), id(2), id(3)]);
+    fn test_eq_ignores_construction_order() {
+        let a = QuorumTree::new(2, [id(1), id(2), id(3)]).unwrap();
+        let b = QuorumTree::new(2, [id(3), id(1), id(2)]).unwrap();
+        let c = QuorumTree::new(3, [id(1), id(2), id(3)]).unwrap();
 
         assert_eq!(a, b);
         assert_eq!(a.canonical_id(), b.canonical_id());
@@ -173,9 +190,9 @@ mod tests {
 
     #[test]
     fn test_hash_is_consistent_with_eq() {
-        let a = QuorumTree::new(2, [id(1), id(2), id(3)]);
-        let b = QuorumTree::new(2, [id(3), id(2), id(1)]);
-        let c = QuorumTree::new(3, [id(1), id(2), id(3)]);
+        let a = QuorumTree::new(2, [id(1), id(2), id(3)]).unwrap();
+        let b = QuorumTree::new(2, [id(3), id(2), id(1)]).unwrap();
+        let c = QuorumTree::new(3, [id(1), id(2), id(3)]).unwrap();
 
         let set: HashSet<QuorumTree<u64>> = [a.clone(), b.clone(), c.clone()].into_iter().collect();
 
@@ -184,18 +201,53 @@ mod tests {
 
     #[test]
     fn test_canonical_id_accessor() {
-        let tree = QuorumTree::new(2, [id(3), id(1), id(2)]);
+        let tree = QuorumTree::new(2, [id(3), id(1), id(2)]).unwrap();
 
         assert_eq!("2/(Id=1,Id=2,Id=3)", tree.canonical_id());
     }
 
     #[test]
-    fn test_children_are_sorted_and_deduplicated() {
-        let tree = QuorumTree::new(2, [id(3), id(1), id(2), id(2)]);
+    fn test_children_are_sorted() {
+        let tree = QuorumTree::new(2, [id(3), id(1), id(2)]).unwrap();
 
         assert_eq!(
             vec![id(1), id(2), id(3)],
             tree.children().cloned().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_new_rejects_duplicate_child() {
+        let err = QuorumTree::new(2, [id(1), id(2), id(2)]).unwrap_err();
+
+        assert_eq!(
+            QuorumTreeError::DuplicateChild {
+                canonical_id: "Id=2".to_string()
+            },
+            err
+        );
+
+        let sub = QuorumTree::new(1, [id(1), id(2)]).unwrap();
+        let err = QuorumTree::new(2, [Node::Subtree(sub.clone()), Node::Subtree(sub)]).unwrap_err();
+
+        assert_eq!(
+            QuorumTreeError::DuplicateChild {
+                canonical_id: "Subtree=1/(Id=1,Id=2)".to_string(),
+            },
+            err
+        );
+    }
+
+    #[test]
+    fn test_new_rejects_unsatisfiable_quorum() {
+        let err = QuorumTree::new(3, [id(1), id(2)]).unwrap_err();
+
+        assert_eq!(
+            QuorumTreeError::UnsatisfiableQuorum {
+                quorum_size: 3,
+                num_children: 2
+            },
+            err
         );
     }
 }

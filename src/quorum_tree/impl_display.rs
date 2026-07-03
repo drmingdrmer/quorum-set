@@ -21,14 +21,14 @@ mod tests {
 
     #[test]
     fn test_display_single_line() {
-        let qset = QuorumTree::new(2, [id(3), id(1), id(2)]);
+        let qset = QuorumTree::new(2, [id(3), id(1), id(2)]).unwrap();
 
         assert_eq!("2/(1,2,3)", qset.to_string());
     }
 
     #[test]
     fn test_display_multiline() {
-        let qset = QuorumTree::new(2, [id(3), id(1), id(2)]);
+        let qset = QuorumTree::new(2, [id(3), id(1), id(2)]).unwrap();
         let expected = r#"2/(
   1,
   2,

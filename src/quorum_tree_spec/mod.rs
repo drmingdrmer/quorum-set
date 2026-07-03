@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 
 use crate::Node;
+use crate::QuorumTreeError;
+use crate::canonical_id::CanonicalId;
 
 mod impl_canonical_id;
 mod impl_display;
@@ -17,9 +19,33 @@ where ID: Ord
 impl<ID> QuorumTreeSpec<ID>
 where ID: Ord
 {
-    pub(crate) fn new(quorum_size: u64, nodes: impl IntoIterator<Item = Node<ID>>) -> Self {
-        let nodes = nodes.into_iter().collect::<BTreeSet<_>>();
-        Self { quorum_size, nodes }
+    pub(crate) fn new(
+        quorum_size: u64,
+        nodes: impl IntoIterator<Item = Node<ID>>,
+    ) -> Result<Self, QuorumTreeError>
+    where
+        ID: CanonicalId,
+    {
+        let mut unique = BTreeSet::new();
+        for node in nodes {
+            if let Some(dup) = unique.replace(node) {
+                return Err(QuorumTreeError::DuplicateChild {
+                    canonical_id: dup.canonical_id(),
+                });
+            }
+        }
+
+        if quorum_size > unique.len() as u64 {
+            return Err(QuorumTreeError::UnsatisfiableQuorum {
+                quorum_size,
+                num_children: unique.len(),
+            });
+        }
+
+        Ok(Self {
+            quorum_size,
+            nodes: unique,
+        })
     }
 
     pub(crate) fn quorum_size(&self) -> u64 {
@@ -56,17 +82,18 @@ mod tests {
     use super::QuorumTreeSpec;
     use crate::Node;
     use crate::QuorumTree;
+    use crate::QuorumTreeError;
 
     fn id(i: u64) -> Node<u64> {
         Node::Id(i)
     }
 
     fn qset(quorum_size: u64, nodes: &[u64]) -> QuorumTreeSpec<u64> {
-        QuorumTreeSpec::new(quorum_size, nodes.iter().copied().map(id))
+        QuorumTreeSpec::new(quorum_size, nodes.iter().copied().map(id)).unwrap()
     }
 
     fn set(quorum_size: u64, nodes: &[u64]) -> Node<u64> {
-        Node::Subtree(QuorumTree::new(quorum_size, nodes.iter().copied().map(id)))
+        Node::Subtree(QuorumTree::new(quorum_size, nodes.iter().copied().map(id)).unwrap())
     }
 
     fn raft_config(nodes: &[u64]) -> Node<u64> {
@@ -141,12 +168,15 @@ mod tests {
 
     #[test]
     fn test_0_nodes_quorum_1() {
-        let qset = qset(1, &[]);
+        let err = QuorumTreeSpec::<u64>::new(1, []).unwrap_err();
 
-        assert_eq!(1, qset.quorum_size());
-
-        assert!(!qset.is_quorum(&[]));
-        assert!(!qset.is_quorum(&[1, 2, 3]));
+        assert_eq!(
+            QuorumTreeError::UnsatisfiableQuorum {
+                quorum_size: 1,
+                num_children: 0
+            },
+            err
+        );
     }
 
     #[test]
@@ -174,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_3_nodes() {
-        let qset = QuorumTreeSpec::new(2, vec![id(1), id(2), id(3)]);
+        let qset = QuorumTreeSpec::new(2, vec![id(1), id(2), id(3)]).unwrap();
 
         assert_eq!(2, qset.quorum_size());
 
@@ -191,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_4_nodes() {
-        let qset = QuorumTreeSpec::new(2, vec![id(1), id(2), id(3), id(4)]);
+        let qset = QuorumTreeSpec::new(2, vec![id(1), id(2), id(3), id(4)]).unwrap();
 
         assert_eq!(2, qset.quorum_size());
 
@@ -241,9 +271,9 @@ mod tests {
     #[test]
     fn test_joint() {
         let read_quorum_tree =
-            QuorumTreeSpec::new(1, [raft_config(&[1, 2, 3]), raft_config(&[4, 5, 6])]);
+            QuorumTreeSpec::new(1, [raft_config(&[1, 2, 3]), raft_config(&[4, 5, 6])]).unwrap();
         let write_quorum_tree =
-            QuorumTreeSpec::new(2, [raft_config(&[1, 2, 3]), raft_config(&[4, 5, 6])]);
+            QuorumTreeSpec::new(2, [raft_config(&[1, 2, 3]), raft_config(&[4, 5, 6])]).unwrap();
 
         assert_eq!(1, read_quorum_tree.quorum_size());
         assert_eq!(2, write_quorum_tree.quorum_size());
@@ -273,7 +303,8 @@ mod tests {
         );
 
         let write_quorum_tree =
-            QuorumTreeSpec::new(2, [raft_config(&[1, 2, 3, 4]), raft_config(&[3, 4, 5, 6])]);
+            QuorumTreeSpec::new(2, [raft_config(&[1, 2, 3, 4]), raft_config(&[3, 4, 5, 6])])
+                .unwrap();
 
         assert_quorum_matches_raft_joint(
             &write_quorum_tree,
@@ -288,14 +319,16 @@ mod tests {
         assert_is_quorum_monotonic(&qset(2, &[1, 2, 3]), &[1, 2, 3]);
         assert_is_quorum_monotonic(&qset(4, &[1, 2, 3, 4]), &[1, 2, 3, 4]);
 
-        let qset = QuorumTreeSpec::new(2, [raft_config(&[1, 2, 3]), raft_config(&[4, 5, 6])]);
+        let qset =
+            QuorumTreeSpec::new(2, [raft_config(&[1, 2, 3]), raft_config(&[4, 5, 6])]).unwrap();
         assert_is_quorum_monotonic(&qset, &[1, 2, 3, 4, 5, 6]);
 
         let qset = QuorumTreeSpec::new(2, [
             set(2, &[1, 2, 3]),
             set(2, &[4, 5, 6]),
             set(2, &[7, 8, 9]),
-        ]);
+        ])
+        .unwrap();
         assert_is_quorum_monotonic(&qset, &[1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 
@@ -305,7 +338,8 @@ mod tests {
             set(2, &[1, 2, 3]),
             set(2, &[4, 5, 6]),
             set(2, &[7, 8, 9]),
-        ]);
+        ])
+        .unwrap();
 
         assert_eq!(2, qset.quorum_size());
 
@@ -321,14 +355,15 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_subtrees_collapse_into_one_child() {
-        // Equal subtrees dedup into a single child: 2-of-1 is unsatisfiable.
-        let qset = QuorumTreeSpec::new(2, [set(2, &[1, 2, 3]), set(2, &[3, 2, 1])]);
+    fn test_duplicate_subtrees_are_rejected() {
+        // Canonically equal subtrees are duplicates even when built in a different node order.
+        let err = QuorumTreeSpec::new(2, [set(2, &[1, 2, 3]), set(2, &[3, 2, 1])]).unwrap_err();
 
-        assert!(!qset.is_quorum(&[1, 2, 3]));
-
-        let qset = QuorumTreeSpec::new(1, [set(2, &[1, 2, 3]), set(2, &[3, 2, 1])]);
-
-        assert!(qset.is_quorum(&[1, 2]));
+        assert_eq!(
+            QuorumTreeError::DuplicateChild {
+                canonical_id: "Subtree=2/(Id=1,Id=2,Id=3)".to_string(),
+            },
+            err
+        );
     }
 }

@@ -81,19 +81,19 @@ mod tests {
     }
 
     fn set(quorum_size: u64, nodes: &[u64]) -> Node<u64> {
-        Node::Subtree(QuorumTree::new(quorum_size, nodes.iter().copied().map(id)))
+        Node::Subtree(QuorumTree::new(quorum_size, nodes.iter().copied().map(id)).unwrap())
     }
 
     #[test]
     fn test_display_single_line() {
-        let qset = QuorumTreeSpec::new(2, [set(1, &[3, 4]), id(5), set(1, &[1, 2])]);
+        let qset = QuorumTreeSpec::new(2, [set(1, &[3, 4]), id(5), set(1, &[1, 2])]).unwrap();
 
         assert_eq!("2/(5,1/(1,2),1/(3,4))", qset.to_string());
     }
 
     #[test]
     fn test_display_multiline() {
-        let qset = QuorumTreeSpec::new(2, [set(1, &[3, 4]), id(5), set(1, &[1, 2])]);
+        let qset = QuorumTreeSpec::new(2, [set(1, &[3, 4]), id(5), set(1, &[1, 2])]).unwrap();
         let expected = r#"2/(
   5,
   1/(
