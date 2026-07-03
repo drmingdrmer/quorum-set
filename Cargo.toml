@@ -17,6 +17,3 @@ readme = "README.md"
 
 [dependencies]
 sha2 = { version = "0.10" }
-
-[lib]
-path = "lib.rs"
