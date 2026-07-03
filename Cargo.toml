@@ -1,0 +1,22 @@
+[package]
+name = "quorum-tree"
+version = "0.1.0"
+edition = "2024"
+
+authors = [
+    "Zhang Yanpo <drdr.xp@gmail.com>",
+]
+categories = ["algorithms", "data-structures"]
+description = "Hierarchical quorum trees with deterministic canonical IDs"
+documentation = "https://docs.rs/quorum-tree"
+homepage = "https://github.com/drmingdrmer/quorum-tree"
+keywords = ["quorum", "raft", "consensus"]
+license = "Apache-2.0"
+repository = "https://github.com/drmingdrmer/quorum-tree"
+readme = "README.md"
+
+[dependencies]
+sha2 = { version = "0.10" }
+
+[lib]
+path = "lib.rs"
