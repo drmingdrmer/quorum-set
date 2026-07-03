@@ -13,10 +13,10 @@ where ID: Ord + fmt::Display
 #[cfg(test)]
 mod tests {
     use super::QuorumTree;
-    use crate::QuorumNode;
+    use crate::Node;
 
-    fn id(i: u64) -> QuorumNode<u64> {
-        QuorumNode::Id(i)
+    fn id(i: u64) -> Node<u64> {
+        Node::Id(i)
     }
 
     #[test]

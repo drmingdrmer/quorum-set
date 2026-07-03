@@ -21,8 +21,8 @@ where W: fmt::Write + ?Sized {
 /// software versions whenever the logical node identity is unchanged.
 ///
 /// User-provided node IDs may emit any string. When a user ID is embedded in a
-/// [`QuorumNode`](crate::QuorumNode), this crate escapes short IDs and hashes
-/// long IDs to keep tree IDs unambiguous and bounded.
+/// [`Node`](crate::Node), this crate escapes short IDs and hashes long IDs to
+/// keep tree IDs unambiguous and bounded.
 pub trait CanonicalId {
     /// Writes this value's canonical ID into `f`.
     ///

@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::QuorumNode;
+use crate::Node;
 
 mod impl_canonical_id;
 mod impl_display;
@@ -9,35 +9,35 @@ mod impl_display;
 pub(crate) struct QuorumTreeSpec<ID>
 where ID: Ord
 {
-    quorum_num: u64,
+    quorum_size: u64,
 
-    nodes: BTreeSet<QuorumNode<ID>>,
+    nodes: BTreeSet<Node<ID>>,
 }
 
 impl<ID> QuorumTreeSpec<ID>
 where ID: Ord
 {
-    pub(crate) fn new(quorum_num: u64, nodes: impl IntoIterator<Item = QuorumNode<ID>>) -> Self {
+    pub(crate) fn new(quorum_size: u64, nodes: impl IntoIterator<Item = Node<ID>>) -> Self {
         let nodes = nodes.into_iter().collect::<BTreeSet<_>>();
-        Self { quorum_num, nodes }
+        Self { quorum_size, nodes }
     }
 
-    pub(crate) fn quorum_num(&self) -> u64 {
-        self.quorum_num
+    pub(crate) fn quorum_size(&self) -> u64 {
+        self.quorum_size
     }
 
     pub(crate) fn is_quorum(&self, ids: &[ID]) -> bool {
-        let quorum_require = self.quorum_num();
-        if quorum_require == 0 {
+        let required = self.quorum_size();
+        if required == 0 {
             return true;
         }
 
         let mut count = 0;
         for node in &self.nodes {
-            if node.is_selected(ids) {
+            if node.is_selected_by(ids) {
                 count += 1;
             }
-            if count >= quorum_require {
+            if count >= required {
                 return true;
             }
         }
@@ -50,22 +50,22 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::QuorumTreeSpec;
-    use crate::QuorumNode;
+    use crate::Node;
     use crate::QuorumTree;
 
-    fn id(i: u64) -> QuorumNode<u64> {
-        QuorumNode::Id(i)
+    fn id(i: u64) -> Node<u64> {
+        Node::Id(i)
     }
 
-    fn qset(quorum_num: u64, nodes: &[u64]) -> QuorumTreeSpec<u64> {
-        QuorumTreeSpec::new(quorum_num, nodes.iter().copied().map(id))
+    fn qset(quorum_size: u64, nodes: &[u64]) -> QuorumTreeSpec<u64> {
+        QuorumTreeSpec::new(quorum_size, nodes.iter().copied().map(id))
     }
 
-    fn set(quorum_num: u64, nodes: &[u64]) -> QuorumNode<u64> {
-        QuorumNode::Set(QuorumTree::new(quorum_num, nodes.iter().copied().map(id)))
+    fn set(quorum_size: u64, nodes: &[u64]) -> Node<u64> {
+        Node::Subtree(QuorumTree::new(quorum_size, nodes.iter().copied().map(id)))
     }
 
-    fn raft_config(nodes: &[u64]) -> QuorumNode<u64> {
+    fn raft_config(nodes: &[u64]) -> Node<u64> {
         let majority = nodes.len() as u64 / 2 + 1;
         set(majority, nodes)
     }
@@ -129,7 +129,7 @@ mod tests {
     fn test_3_nodes_quorum_0() {
         let qset = qset(0, &[1, 2, 3]);
 
-        assert_eq!(0, qset.quorum_num());
+        assert_eq!(0, qset.quorum_size());
 
         assert!(qset.is_quorum(&[]));
         assert!(qset.is_quorum(&[1]));
@@ -140,7 +140,7 @@ mod tests {
     fn test_3_nodes_quorum_1() {
         let qset = qset(1, &[1, 2, 3]);
 
-        assert_eq!(1, qset.quorum_num());
+        assert_eq!(1, qset.quorum_size());
 
         assert!(!qset.is_quorum(&[]));
         assert!(qset.is_quorum(&[1]));
@@ -152,7 +152,7 @@ mod tests {
     fn test_3_nodes() {
         let qset = QuorumTreeSpec::new(2, vec![id(1), id(2), id(3)]);
 
-        assert_eq!(2, qset.quorum_num());
+        assert_eq!(2, qset.quorum_size());
 
         assert!(!qset.is_quorum(&[]));
         assert!(!qset.is_quorum(&[1]));
@@ -169,7 +169,7 @@ mod tests {
     fn test_4_nodes() {
         let qset = QuorumTreeSpec::new(2, vec![id(1), id(2), id(3), id(4)]);
 
-        assert_eq!(2, qset.quorum_num());
+        assert_eq!(2, qset.quorum_size());
 
         assert!(!qset.is_quorum(&[]));
         assert!(!qset.is_quorum(&[1]));
@@ -193,7 +193,7 @@ mod tests {
     fn test_4_nodes_quorum_4() {
         let qset = qset(4, &[1, 2, 3, 4]);
 
-        assert_eq!(4, qset.quorum_num());
+        assert_eq!(4, qset.quorum_size());
 
         assert!(!qset.is_quorum(&[]));
         assert!(!qset.is_quorum(&[1]));
@@ -205,7 +205,7 @@ mod tests {
     fn test_5_nodes_quorum_4() {
         let qset = qset(4, &[1, 2, 3, 4, 5]);
 
-        assert_eq!(4, qset.quorum_num());
+        assert_eq!(4, qset.quorum_size());
 
         assert!(!qset.is_quorum(&[]));
         assert!(!qset.is_quorum(&[1]));
@@ -221,8 +221,8 @@ mod tests {
         let write_quorum_tree =
             QuorumTreeSpec::new(2, [raft_config(&[1, 2, 3]), raft_config(&[4, 5, 6])]);
 
-        assert_eq!(1, read_quorum_tree.quorum_num());
-        assert_eq!(2, write_quorum_tree.quorum_num());
+        assert_eq!(1, read_quorum_tree.quorum_size());
+        assert_eq!(2, write_quorum_tree.quorum_size());
 
         assert!(!read_quorum_tree.is_quorum(&[]));
         assert!(!read_quorum_tree.is_quorum(&[1]));
@@ -283,7 +283,7 @@ mod tests {
             set(2, &[7, 8, 9]),
         ]);
 
-        assert_eq!(2, qset.quorum_num());
+        assert_eq!(2, qset.quorum_size());
 
         assert!(!qset.is_quorum(&[]));
         assert!(!qset.is_quorum(&[1, 2]));

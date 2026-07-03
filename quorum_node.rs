@@ -14,32 +14,32 @@ use crate::canonical_id::fmt_escaped;
 /// allow hierarchical quorum rules such as "two data centers, each selected by
 /// a local majority".
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum QuorumNode<ID>
+pub enum Node<ID>
 where ID: Ord
 {
     /// A leaf node ID.
     Id(ID),
 
     /// A nested quorum tree.
-    Set(QuorumTree<ID>),
+    Subtree(QuorumTree<ID>),
 }
 
-impl<ID> QuorumNode<ID>
+impl<ID> Node<ID>
 where ID: Ord
 {
     /// Returns whether `ids` select this child node.
     ///
     /// A leaf node is selected when its ID is present in `ids`. A nested tree is
     /// selected when `ids` satisfy that tree.
-    pub fn is_selected(&self, ids: &[ID]) -> bool {
+    pub fn is_selected_by(&self, ids: &[ID]) -> bool {
         match self {
-            QuorumNode::Id(id) => ids.contains(id),
-            QuorumNode::Set(m) => m.is_quorum(ids),
+            Node::Id(id) => ids.contains(id),
+            Node::Subtree(m) => m.is_quorum(ids),
         }
     }
 }
 
-impl<ID> CanonicalId for QuorumNode<ID>
+impl<ID> CanonicalId for Node<ID>
 where
     ID: CanonicalId,
     ID: Ord,
@@ -47,7 +47,7 @@ where
     fn fmt_canonical_id<W>(&self, f: &mut W) -> fmt::Result
     where W: fmt::Write + ?Sized {
         match self {
-            QuorumNode::Id(id) => {
+            Node::Id(id) => {
                 write!(f, "Id=")?;
 
                 let id = id.canonical_id();
@@ -57,8 +57,8 @@ where
                     fmt_escaped(&id, f)?;
                 }
             }
-            QuorumNode::Set(m) => {
-                write!(f, "Set=")?;
+            Node::Subtree(m) => {
+                write!(f, "Subtree=")?;
                 m.fmt_canonical_id(f)?;
             }
         }

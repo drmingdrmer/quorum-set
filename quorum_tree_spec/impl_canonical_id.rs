@@ -13,7 +13,7 @@ where ID: Ord + CanonicalId
 {
     fn fmt_canonical_id<W>(&self, f: &mut W) -> fmt::Result
     where W: fmt::Write + ?Sized {
-        write!(f, "{}/", self.quorum_num)?;
+        write!(f, "{}/", self.quorum_size)?;
 
         let mut s = String::new();
         write!(&mut s, "(")?;
@@ -44,20 +44,20 @@ where ID: Ord + CanonicalId
 mod tests {
     use super::QuorumTreeSpec;
     use crate::CanonicalId;
-    use crate::QuorumNode;
+    use crate::Node;
     use crate::QuorumTree;
     use crate::canonical_id::MAX_CANONICAL_ID_LEN;
 
-    fn id(i: u64) -> QuorumNode<u64> {
-        QuorumNode::Id(i)
+    fn id(i: u64) -> Node<u64> {
+        Node::Id(i)
     }
 
-    fn str_id(s: &str) -> QuorumNode<String> {
-        QuorumNode::Id(s.to_string())
+    fn str_id(s: &str) -> Node<String> {
+        Node::Id(s.to_string())
     }
 
-    fn set(quorum_num: u64, nodes: &[u64]) -> QuorumNode<u64> {
-        QuorumNode::Set(QuorumTree::new(quorum_num, nodes.iter().copied().map(id)))
+    fn set(quorum_size: u64, nodes: &[u64]) -> Node<u64> {
+        Node::Subtree(QuorumTree::new(quorum_size, nodes.iter().copied().map(id)))
     }
 
     #[test]
@@ -72,7 +72,7 @@ mod tests {
         let qset = QuorumTreeSpec::new(2, [set(1, &[3, 4]), id(5), set(1, &[1, 2])]);
 
         assert_eq!(
-            "2/(Id=5,Set=1/(Id=1,Id=2),Set=1/(Id=3,Id=4))",
+            "2/(Id=5,Subtree=1/(Id=1,Id=2),Subtree=1/(Id=3,Id=4))",
             qset.canonical_id()
         );
     }
@@ -84,7 +84,7 @@ mod tests {
         let qset3 = QuorumTreeSpec::new(2, [set(1, &[2, 1]), set(1, &[4, 3]), id(5)]);
 
         assert_eq!(
-            "2/(Id=5,Set=1/(Id=1,Id=2),Set=1/(Id=3,Id=4))",
+            "2/(Id=5,Subtree=1/(Id=1,Id=2),Subtree=1/(Id=3,Id=4))",
             qset1.canonical_id()
         );
         assert_eq!(qset1.canonical_id(), qset2.canonical_id());
@@ -96,21 +96,21 @@ mod tests {
         let nested = QuorumTree::new(2, [set(1, &[9, 10]), id(11), set(1, &[7, 8])]);
 
         assert_eq!(
-            "2/(Id=11,Set=1/(Id=7,Id=8),Set=1/(Id=9,Id=10))",
+            "2/(Id=11,Subtree=1/(Id=7,Id=8),Subtree=1/(Id=9,Id=10))",
             nested.canonical_id()
         );
 
         let qset = QuorumTreeSpec::new(3, [
             set(2, &[4, 5, 6]),
-            QuorumNode::Set(nested),
+            Node::Subtree(nested),
             id(12),
             set(2, &[1, 2, 3]),
         ]);
-        let canonical_body = "(Id=12,Set=2/(Id=1,Id=2,Id=3),Set=2/(Id=11,Set=1/(Id=7,Id=8),Set=1/(Id=9,Id=10)),Set=2/(Id=4,Id=5,Id=6))";
+        let canonical_body = "(Id=12,Subtree=2/(Id=1,Id=2,Id=3),Subtree=2/(Id=11,Subtree=1/(Id=7,Id=8),Subtree=1/(Id=9,Id=10)),Subtree=2/(Id=4,Id=5,Id=6))";
 
         assert!(canonical_body.len() > MAX_CANONICAL_ID_LEN);
         assert_eq!(
-            "3/Hash#4:c1fb7637ad0185cf04a9967077f1359364934c2c95bf0dc01faade93f6724660",
+            "3/Hash#4:f7bbda30597f2548c831f13d8c9b295ef538373ed7f437414836e41b05be1c0a",
             qset.canonical_id()
         );
     }
@@ -134,9 +134,9 @@ mod tests {
 
     #[test]
     fn test_canonical_id_escapes_nested_set() {
-        let qset = QuorumTreeSpec::new(1, [QuorumNode::Set(QuorumTree::new(1, [str_id("a,b")]))]);
+        let qset = QuorumTreeSpec::new(1, [Node::Subtree(QuorumTree::new(1, [str_id("a,b")]))]);
 
-        assert_eq!("1/(Set=1/(Id=a%2Cb))", qset.canonical_id());
+        assert_eq!("1/(Subtree=1/(Id=a%2Cb))", qset.canonical_id());
     }
 
     #[test]

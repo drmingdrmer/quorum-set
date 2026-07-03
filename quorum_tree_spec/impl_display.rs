@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::QuorumTreeSpec;
-use crate::QuorumNode;
+use crate::Node;
 
 impl<ID> fmt::Display for QuorumTreeSpec<ID>
 where ID: Ord + fmt::Display
@@ -19,7 +19,7 @@ impl<ID> QuorumTreeSpec<ID>
 where ID: Ord + fmt::Display
 {
     fn fmt_single_line(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}/(", self.quorum_num)?;
+        write!(f, "{}/(", self.quorum_size)?;
         for (i, node) in self.nodes.iter().enumerate() {
             if i > 0 {
                 write!(f, ",")?;
@@ -30,7 +30,7 @@ where ID: Ord + fmt::Display
     }
 
     fn fmt_multiline(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        write!(f, "{}/(", self.quorum_num)?;
+        write!(f, "{}/(", self.quorum_size)?;
 
         for node in &self.nodes {
             writeln!(f)?;
@@ -44,21 +44,21 @@ where ID: Ord + fmt::Display
         write!(f, ")")
     }
 
-    fn fmt_node_single_line(node: &QuorumNode<ID>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt_node_single_line(node: &Node<ID>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match node {
-            QuorumNode::Id(id) => write!(f, "{id}"),
-            QuorumNode::Set(m) => m.spec.fmt_single_line(f),
+            Node::Id(id) => write!(f, "{id}"),
+            Node::Subtree(m) => m.spec.fmt_single_line(f),
         }
     }
 
     fn fmt_node_multiline(
-        node: &QuorumNode<ID>,
+        node: &Node<ID>,
         f: &mut fmt::Formatter<'_>,
         indent: usize,
     ) -> fmt::Result {
         match node {
-            QuorumNode::Id(id) => write!(f, "{id}"),
-            QuorumNode::Set(m) => m.spec.fmt_multiline(f, indent),
+            Node::Id(id) => write!(f, "{id}"),
+            Node::Subtree(m) => m.spec.fmt_multiline(f, indent),
         }
     }
 
@@ -73,15 +73,15 @@ where ID: Ord + fmt::Display
 #[cfg(test)]
 mod tests {
     use super::QuorumTreeSpec;
-    use crate::QuorumNode;
+    use crate::Node;
     use crate::QuorumTree;
 
-    fn id(i: u64) -> QuorumNode<u64> {
-        QuorumNode::Id(i)
+    fn id(i: u64) -> Node<u64> {
+        Node::Id(i)
     }
 
-    fn set(quorum_num: u64, nodes: &[u64]) -> QuorumNode<u64> {
-        QuorumNode::Set(QuorumTree::new(quorum_num, nodes.iter().copied().map(id)))
+    fn set(quorum_size: u64, nodes: &[u64]) -> Node<u64> {
+        Node::Subtree(QuorumTree::new(quorum_size, nodes.iter().copied().map(id)))
     }
 
     #[test]
