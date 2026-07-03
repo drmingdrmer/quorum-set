@@ -3,6 +3,8 @@
 
 use std::cmp::Ordering;
 use std::fmt;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 pub use canonical_id::CanonicalId;
 pub use quorum_node::Node;
@@ -87,6 +89,14 @@ where ID: Ord
     pub fn is_quorum(&self, ids: &[ID]) -> bool {
         self.spec.is_quorum(ids)
     }
+
+    /// Returns the canonical ID of this tree.
+    ///
+    /// The canonical ID decides equality and ordering. It is computed once at
+    /// construction, so this accessor does not allocate.
+    pub fn canonical_id(&self) -> &str {
+        &self.canonical_id
+    }
 }
 
 /// Equality and ordering are decided solely by `canonical_id`.
@@ -120,11 +130,61 @@ where ID: Ord
     }
 }
 
+/// Hashing is based solely on `canonical_id`, consistent with equality.
+impl<ID> Hash for QuorumTree<ID>
+where ID: Ord
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.canonical_id.hash(state);
+    }
+}
+
 impl<ID> CanonicalId for QuorumTree<ID>
 where ID: Ord + CanonicalId
 {
     fn fmt_canonical_id<W>(&self, f: &mut W) -> fmt::Result
     where W: fmt::Write + ?Sized {
         write!(f, "{}", self.canonical_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use crate::Node;
+    use crate::QuorumTree;
+
+    fn id(i: u64) -> Node<u64> {
+        Node::Id(i)
+    }
+
+    #[test]
+    fn test_eq_ignores_construction_order_and_duplicates() {
+        let a = QuorumTree::new(2, [id(1), id(2), id(3)]);
+        let b = QuorumTree::new(2, [id(3), id(1), id(2), id(2)]);
+        let c = QuorumTree::new(3, [id(1), id(2), id(3)]);
+
+        assert_eq!(a, b);
+        assert_eq!(a.canonical_id(), b.canonical_id());
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_hash_is_consistent_with_eq() {
+        let a = QuorumTree::new(2, [id(1), id(2), id(3)]);
+        let b = QuorumTree::new(2, [id(3), id(2), id(1)]);
+        let c = QuorumTree::new(3, [id(1), id(2), id(3)]);
+
+        let set: HashSet<QuorumTree<u64>> = [a.clone(), b.clone(), c.clone()].into_iter().collect();
+
+        assert_eq!(HashSet::from([a, c]), set);
+    }
+
+    #[test]
+    fn test_canonical_id_accessor() {
+        let tree = QuorumTree::new(2, [id(3), id(1), id(2)]);
+
+        assert_eq!("2/(Id=1,Id=2,Id=3)", tree.canonical_id());
     }
 }

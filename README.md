@@ -15,7 +15,6 @@ quorum rules. A complete quorum configuration should use two trees:
 The required property is cross-intersection:
 
 - every read quorum must intersect with every write quorum
-- every write quorum must intersect with every read quorum
 - two read quorums do not necessarily need to intersect with each other
 - two write quorums do not necessarily need to intersect with each other
 

@@ -31,6 +31,23 @@ jobs:
           RUST_LOG: debug
           RUST_BACKTRACE: full
 
+  stable:
+    name: Test on stable
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup | Toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Test
+        run: cargo +stable test
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+
   lint:
     name: lint
     runs-on: ubuntu-latest

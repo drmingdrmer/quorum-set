@@ -126,6 +126,26 @@ mod tests {
     }
 
     #[test]
+    fn test_0_nodes_quorum_0() {
+        let qset = qset(0, &[]);
+
+        assert_eq!(0, qset.quorum_size());
+
+        assert!(qset.is_quorum(&[]));
+        assert!(qset.is_quorum(&[1]));
+    }
+
+    #[test]
+    fn test_0_nodes_quorum_1() {
+        let qset = qset(1, &[]);
+
+        assert_eq!(1, qset.quorum_size());
+
+        assert!(!qset.is_quorum(&[]));
+        assert!(!qset.is_quorum(&[1, 2, 3]));
+    }
+
+    #[test]
     fn test_3_nodes_quorum_0() {
         let qset = qset(0, &[1, 2, 3]);
 
@@ -294,5 +314,17 @@ mod tests {
         assert!(qset.is_quorum(&[1, 3, 7, 9]));
         assert!(qset.is_quorum(&[4, 6, 7, 8]));
         assert!(qset.is_quorum(&[1, 2, 3, 4, 5, 6, 7, 8, 9]));
+    }
+
+    #[test]
+    fn test_duplicate_subtrees_collapse_into_one_child() {
+        // Equal subtrees dedup into a single child: 2-of-1 is unsatisfiable.
+        let qset = QuorumTreeSpec::new(2, [set(2, &[1, 2, 3]), set(2, &[3, 2, 1])]);
+
+        assert!(!qset.is_quorum(&[1, 2, 3]));
+
+        let qset = QuorumTreeSpec::new(1, [set(2, &[1, 2, 3]), set(2, &[3, 2, 1])]);
+
+        assert!(qset.is_quorum(&[1, 2]));
     }
 }

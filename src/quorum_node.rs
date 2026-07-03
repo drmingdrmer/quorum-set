@@ -13,7 +13,7 @@ use crate::canonical_id::fmt_escaped;
 /// A node can be either a leaf node ID or a nested quorum tree. Nested trees
 /// allow hierarchical quorum rules such as "two data centers, each selected by
 /// a local majority".
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Node<ID>
 where ID: Ord
 {
