@@ -14,11 +14,24 @@ where W: fmt::Write + ?Sized {
     Ok(())
 }
 
-/// A trait that generates a canonical ID for an instance.
+/// Generates a deterministic canonical ID.
+///
+/// `QuorumTree` uses canonical IDs for equality and ordering. Implementations
+/// for application node IDs should be stable across process restarts and
+/// software versions whenever the logical node identity is unchanged.
+///
+/// User-provided node IDs may emit any string. When a user ID is embedded in a
+/// [`QuorumNode`](crate::QuorumNode), this crate escapes short IDs and hashes
+/// long IDs to keep tree IDs unambiguous and bounded.
 pub trait CanonicalId {
+    /// Writes this value's canonical ID into `f`.
+    ///
+    /// Implement this method directly when the ID can be written without an
+    /// intermediate allocation.
     fn fmt_canonical_id<W>(&self, f: &mut W) -> fmt::Result
     where W: fmt::Write + ?Sized;
 
+    /// Returns this value's canonical ID as a [`String`].
     fn canonical_id(&self) -> String {
         let mut s = String::new();
         self.fmt_canonical_id(&mut s).expect("writing to String should not fail");

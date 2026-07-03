@@ -1,36 +1,35 @@
+#![doc = include_str!("README.md")]
+#![warn(missing_docs)]
+
 use std::cmp::Ordering;
 use std::fmt;
 
 pub use canonical_id::CanonicalId;
 pub use quorum_node::QuorumNode;
-pub use quorum_tree_spec::QuorumTreeSpec;
 
 mod canonical_id;
 mod impl_display;
 mod quorum_node;
 mod quorum_tree_spec;
 
-/// A quorum tree whose node can be either a node ID or a nested quorum set.
+use quorum_tree_spec::QuorumTreeSpec;
+
+/// A single quorum rule represented as a tree.
 ///
-/// A quorum tree represents one quorum rule. Read and write quorums should be
-/// represented as separate trees because they may use different node sets.
+/// `QuorumTree` models one side of a quorum configuration. A consensus
+/// implementation should usually build one tree for read quorums and another
+/// tree for write quorums, then ensure every read quorum intersects every write
+/// quorum.
 ///
-/// For example, a node set {A, B, C} can be a quorum set. That set {A, B, C},
-/// with quorum num 2, can also be a node of another quorum set.
-///
-/// For example:
-/// ```text
-/// [quorum_num=2:[A,B,C], quorum_num=2:[D,E,F], G]
-/// ```
+/// A child node is selected when it is either an included node ID or a nested
+/// quorum tree whose own quorum rule is satisfied.
 ///
 /// # Invariants
 ///
-/// - A [`QuorumTree`] represents exactly one quorum rule. Read and write quorum rules must be
-///   modeled as separate trees.
+/// - A [`QuorumTree`] represents exactly one quorum rule.
 /// - Child nodes are stored in a `BTreeSet`, so duplicate nodes are removed and traversal order is
 ///   deterministic according to [`QuorumNode`] ordering.
-/// - [`QuorumTree`] caches the canonical ID built from its [`QuorumTreeSpec`]. Equality and
-///   ordering for [`QuorumTree`] are based only on this canonical ID.
+/// - Equality and ordering for [`QuorumTree`] are based only on its canonical ID.
 /// - Canonical IDs are stable identifiers. [`std::fmt::Display`] is human-readable output and is
 ///   not a serialization format.
 #[derive(Clone, Debug)]
@@ -45,6 +44,29 @@ where ID: Ord
 impl<ID> QuorumTree<ID>
 where ID: Ord
 {
+    /// Builds a quorum tree from a quorum number and child nodes.
+    ///
+    /// `quorum_num` is the number of child nodes that must be selected for this
+    /// tree to be selected. A child can be a single ID or another quorum tree.
+    ///
+    /// Duplicate child nodes are removed. If `quorum_num` is `0`, every input
+    /// satisfies the tree. If `quorum_num` is greater than the number of unique
+    /// child nodes, no input can satisfy the tree.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use quorum_tree::{QuorumNode, QuorumTree};
+    ///
+    /// let tree = QuorumTree::new(2, [
+    ///     QuorumNode::Id(1),
+    ///     QuorumNode::Id(2),
+    ///     QuorumNode::Id(3),
+    /// ]);
+    ///
+    /// assert!(tree.is_quorum(&[1, 2]));
+    /// assert!(!tree.is_quorum(&[1]));
+    /// ```
     pub fn new(quorum_num: u64, nodes: impl IntoIterator<Item = QuorumNode<ID>>) -> Self
     where ID: CanonicalId {
         let spec = QuorumTreeSpec::new(quorum_num, nodes);
@@ -52,10 +74,16 @@ where ID: Ord
         Self { spec, canonical_id }
     }
 
+    /// Returns the number of selected child nodes required to satisfy this
+    /// tree.
     pub fn quorum_num(&self) -> u64 {
         self.spec.quorum_num()
     }
 
+    /// Returns whether `ids` satisfy this quorum tree.
+    ///
+    /// Each child node can contribute at most one selected child. Repeating the
+    /// same ID in `ids` does not increase the selected count.
     pub fn is_quorum(&self, ids: &[ID]) -> bool {
         self.spec.is_quorum(ids)
     }

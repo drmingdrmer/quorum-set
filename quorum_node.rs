@@ -8,23 +8,29 @@ use crate::canonical_id::CanonicalId;
 use crate::canonical_id::MAX_CANONICAL_ID_LEN;
 use crate::canonical_id::fmt_escaped;
 
-/// Either a node ID or a nested quorum set.
+/// A child of a [`QuorumTree`](crate::QuorumTree).
+///
+/// A node can be either a leaf node ID or a nested quorum tree. Nested trees
+/// allow hierarchical quorum rules such as "two data centers, each selected by
+/// a local majority".
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum QuorumNode<ID>
 where ID: Ord
 {
+    /// A leaf node ID.
     Id(ID),
+
+    /// A nested quorum tree.
     Set(QuorumTree<ID>),
 }
 
 impl<ID> QuorumNode<ID>
 where ID: Ord
 {
-    /// whether the `ids` select this node or not.
+    /// Returns whether `ids` select this child node.
     ///
-    /// If it is a single node, it means this node ID is included in the
-    /// provided IDs. If it is a nested quorum set, being selected means the
-    /// IDs form a quorum of the nested quorum set.
+    /// A leaf node is selected when its ID is present in `ids`. A nested tree is
+    /// selected when `ids` satisfy that tree.
     pub fn is_selected(&self, ids: &[ID]) -> bool {
         match self {
             QuorumNode::Id(id) => ids.contains(id),

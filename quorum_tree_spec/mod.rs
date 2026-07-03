@@ -6,7 +6,7 @@ mod impl_canonical_id;
 mod impl_display;
 
 #[derive(Clone, Debug)]
-pub struct QuorumTreeSpec<ID>
+pub(crate) struct QuorumTreeSpec<ID>
 where ID: Ord
 {
     quorum_num: u64,
@@ -17,16 +17,16 @@ where ID: Ord
 impl<ID> QuorumTreeSpec<ID>
 where ID: Ord
 {
-    pub fn new(quorum_num: u64, nodes: impl IntoIterator<Item = QuorumNode<ID>>) -> Self {
+    pub(crate) fn new(quorum_num: u64, nodes: impl IntoIterator<Item = QuorumNode<ID>>) -> Self {
         let nodes = nodes.into_iter().collect::<BTreeSet<_>>();
         Self { quorum_num, nodes }
     }
 
-    pub fn quorum_num(&self) -> u64 {
+    pub(crate) fn quorum_num(&self) -> u64 {
         self.quorum_num
     }
 
-    pub fn is_quorum(&self, ids: &[ID]) -> bool {
+    pub(crate) fn is_quorum(&self, ids: &[ID]) -> bool {
         let quorum_require = self.quorum_num();
         if quorum_require == 0 {
             return true;
