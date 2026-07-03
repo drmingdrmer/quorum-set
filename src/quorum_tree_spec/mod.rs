@@ -26,6 +26,10 @@ where ID: Ord
         self.quorum_size
     }
 
+    pub(crate) fn children(&self) -> impl Iterator<Item = &Node<ID>> {
+        self.nodes.iter()
+    }
+
     pub(crate) fn is_quorum(&self, ids: &[ID]) -> bool {
         let required = self.quorum_size();
         if required == 0 {
