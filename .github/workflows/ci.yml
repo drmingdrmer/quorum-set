@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  schedule: [cron: "40 1 * * 0"]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v4
+
+      - name: Build | Release Mode
+        run: cargo build --release
+
+  unittest:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v4
+
+      - name: Test
+        run: cargo test
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup | Components
+        run: rustup component add rustfmt clippy
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        run: cargo clippy --no-deps --all-targets -- -D warnings
+
+      - name: Build-doc
+        run: cargo doc --all --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: Package
+        run: cargo package --allow-dirty
