@@ -1,7 +1,10 @@
 use std::error::Error;
 use std::fmt;
 
-/// An error returned when building an invalid [`QuorumTree`](crate::QuorumTree).
+#[cfg(doc)]
+use crate::QuorumTree;
+
+/// An error returned when building an invalid [`QuorumTree`].
 ///
 /// Both cases are caller bugs: a correct quorum rule never contains the same
 /// child twice and never requires more children than it has. Construction

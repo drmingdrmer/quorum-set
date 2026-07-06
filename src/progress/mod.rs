@@ -1,4 +1,4 @@
-//! Progress tracking over a [`QuorumSet`](crate::QuorumSet).
+//! Progress tracking over a [`QuorumSet`].
 //!
 //! [`VecProgress`] stores per-node progress values and keeps the greatest value
 //! accepted by the configured quorum set. In Raft terms, it can be viewed as a
@@ -11,6 +11,9 @@
 //!
 //! This module is designed for small consensus memberships where a compact
 //! vector is simpler than indexed storage.
+
+#[cfg(doc)]
+use crate::QuorumSet;
 
 #[cfg(feature = "bench")]
 #[cfg(test)]

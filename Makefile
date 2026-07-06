@@ -15,7 +15,7 @@ fmt:
 	cargo fmt
 
 clippy:
-	cargo clippy --no-deps --all-targets -- -D warnings
+	cargo clippy --no-deps --all-targets --features bench -- -D warnings
 
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps

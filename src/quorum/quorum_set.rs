@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+#[cfg(doc)]
+use crate::QuorumTree;
+
 /// Common interface for every quorum rule supported by this crate.
 ///
 /// A quorum is a collection of nodes that a read or write operation in a distributed system has to
@@ -7,7 +10,7 @@ use std::sync::Arc;
 ///
 /// Implementations must be upward-closed: adding IDs to an accepted quorum must keep it accepted.
 /// The crate provides implementations for flat majority sets, joint quorum sets, and hierarchical
-/// [`QuorumTree`](crate::QuorumTree) rules.
+/// [`QuorumTree`] rules.
 pub trait QuorumSet {
     /// Node ID type in this quorum set.
     type Id: 'static;

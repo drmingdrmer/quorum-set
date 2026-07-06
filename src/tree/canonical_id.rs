@@ -1,5 +1,10 @@
 use std::fmt;
 
+#[cfg(doc)]
+use crate::Node;
+#[cfg(doc)]
+use crate::QuorumTree;
+
 pub(crate) const MAX_CANONICAL_ID_LEN: usize = 64;
 
 pub(crate) fn fmt_escaped<W>(s: &str, f: &mut W) -> fmt::Result
@@ -16,7 +21,7 @@ where W: fmt::Write + ?Sized {
 
 /// Generates a deterministic canonical ID.
 ///
-/// `QuorumTree` uses canonical IDs for equality and ordering. Implementations
+/// [`QuorumTree`] uses canonical IDs for equality and ordering. Implementations
 /// for application node IDs should be stable across process restarts and
 /// software versions whenever the logical node identity is unchanged.
 ///
@@ -25,8 +30,8 @@ where W: fmt::Write + ?Sized {
 /// canonical ID, two structurally different trees could compare as equal.
 ///
 /// User-provided node IDs may emit any string. When a user ID is embedded in a
-/// [`Node`](crate::Node), this crate escapes short IDs and hashes long IDs to
-/// keep tree IDs unambiguous and bounded.
+/// [`Node`], this crate escapes short IDs and hashes long IDs to keep tree IDs
+/// unambiguous and bounded.
 pub trait CanonicalId {
     /// Writes this value's canonical ID into `f`.
     ///

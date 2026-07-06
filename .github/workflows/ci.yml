@@ -31,6 +31,12 @@ jobs:
           RUST_LOG: debug
           RUST_BACKTRACE: full
 
+      - name: Test | Bench feature
+        run: cargo test --features bench
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+
   stable:
     name: Test on stable
     runs-on: ubuntu-latest
@@ -80,7 +86,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: clippy
-        run: cargo clippy --no-deps --all-targets -- -D warnings
+        run: cargo clippy --no-deps --all-targets --features bench -- -D warnings
 
       - name: Build-doc
         run: cargo doc --all --no-deps

@@ -59,7 +59,7 @@ where
 impl<Entry, QS> Display for VecProgress<Entry, QS>
 where
     Entry: VecProgressEntry + Display,
-    QS: QuorumSet<Id = Entry::Id> + 'static,
+    QS: QuorumSet<Id = Entry::Id>,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{")?;

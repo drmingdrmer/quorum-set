@@ -1,9 +1,10 @@
+#[cfg(doc)]
+use crate::VecProgress;
+
 /// Entry stored in [`VecProgress`].
 ///
-/// `VecProgress` only uses the ID and progress value. Other entry fields are
+/// [`VecProgress`] only uses the ID and progress value. Other entry fields are
 /// application-owned state.
-///
-/// [`VecProgress`]: crate::VecProgress
 pub trait VecProgressEntry {
     /// ID type of the entry.
     type Id: 'static + PartialEq;

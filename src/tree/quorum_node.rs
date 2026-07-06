@@ -8,7 +8,7 @@ use super::canonical_id::MAX_CANONICAL_ID_LEN;
 use super::canonical_id::fmt_escaped;
 use crate::QuorumTree;
 
-/// A child of a [`QuorumTree`](crate::QuorumTree).
+/// A child of a [`QuorumTree`].
 ///
 /// A node can be either a leaf node ID or a nested quorum tree. Nested trees
 /// allow hierarchical quorum rules such as "two data centers, each selected by

@@ -13,8 +13,9 @@ ships three implementations:
 - `QuorumTree<ID>`: a hierarchical quorum built from nested `Node` values.
 
 `VecProgress` is the main consumer. It tracks per-node progress and maintains
-the greatest progress value accepted by the configured `QuorumSet`. `Coherent`
-models the intersection relation used by membership changes.
+the greatest progress value accepted by the configured `QuorumSet`.
+`QuorumIntersection` models the intersection relation used by membership
+changes.
 
 `QuorumTree` is the structural implementation. A tree contains child nodes, and
 each child is either a node ID or another `QuorumTree`. The tree is satisfied
@@ -162,16 +163,17 @@ assert_eq!(Some(&5), progress.update_progress(&2, 5));
 assert_eq!(&5, progress.quorum_accepted());
 ```
 
-## Coherence
+## Quorum Intersection
 
 Consensus membership changes need every quorum in one membership to intersect
-every quorum in the next. `Coherent` checks that relation for joint
-configurations, and `FindCoherent` builds the intermediate joint config used
+every quorum in the next. `QuorumIntersection` checks that relation for joint
+configurations, and `QuorumBridge` builds the intermediate joint config used
 when moving between memberships.
 
-This crate checks quorum satisfaction and coherence for the supported quorum-set
-forms. It does not prove that arbitrary read and write quorum designs are
-compatible; callers still choose the read/write rules their protocol requires.
+This crate checks quorum satisfaction and quorum intersection for the supported
+quorum-set forms. It does not prove that arbitrary read and write quorum
+designs are compatible; callers still choose the read/write rules their
+protocol requires.
 
 ## Canonical IDs
 
