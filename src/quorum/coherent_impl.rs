@@ -3,8 +3,10 @@ use std::collections::BTreeSet;
 use crate::quorum::Coherent;
 use crate::quorum::coherent::FindCoherent;
 
-/// Two joint configs are coherent iff they share at least one config: then every quorum of one
-/// intersects every quorum of the other.
+/// Two joint configs are treated as coherent when they share at least one config: every quorum of
+/// one then intersects every quorum of the other. Sharing a config is sufficient but not necessary
+/// for that property, so this check can return `false` for a pair of configs whose quorums do in
+/// fact all intersect.
 impl<NID> Coherent<NID, Vec<BTreeSet<NID>>> for Vec<BTreeSet<NID>>
 where NID: PartialOrd + Ord + Clone + 'static
 {

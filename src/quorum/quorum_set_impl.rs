@@ -7,7 +7,8 @@ use crate::quorum::quorum_set::QuorumSet;
 /// Majority quorum implementation for a flat voter set.
 ///
 /// A candidate set is accepted when it contains more than half of the IDs in
-/// this `BTreeSet`.
+/// this `BTreeSet`. An empty `BTreeSet` accepts no candidate set, unlike an
+/// empty joint config (`Vec<BTreeSet>`), which accepts every candidate set.
 impl<ID> QuorumSet for BTreeSet<ID>
 where ID: PartialOrd + Ord + Clone + 'static
 {
@@ -37,6 +38,8 @@ where ID: PartialOrd + Ord + Clone + 'static
 ///
 /// A candidate set is accepted only when it is a majority quorum in every
 /// member config. `ids()` returns the deduplicated union of all config IDs.
+/// An empty `Vec` accepts every candidate set: with no member config, the
+/// requirement is vacuously satisfied.
 impl<NID> QuorumSet for Vec<BTreeSet<NID>>
 where NID: PartialOrd + Ord + Clone + 'static
 {

@@ -86,7 +86,9 @@ where
     ///
     /// Voters are created from `quorum_set.ids()`. Learners are tracked after
     /// voters and never contribute to quorum acceptance. `default_entry` builds
-    /// the initial entry for every voter and learner ID.
+    /// the initial entry for every voter and learner ID; entries may start at
+    /// any progress value, and the initial quorum-accepted value is computed
+    /// from the initial voter progress.
     pub fn new(
         quorum_set: QS,
         learner_ids: impl IntoIterator<Item = Entry::Id>,
@@ -96,11 +98,24 @@ where
 
         let voter_count = entries.len();
 
+        // Initial progress is not necessarily `Progress::default()`: sort voters
+        // in descending progress order and find the greatest accepted value.
+        entries.sort_by(|a, b| b.progress().cmp(a.progress()));
+
+        let mut quorum_accepted = Entry::Progress::default();
+        for i in 0..voter_count {
+            let ids = entries[..=i].iter().map(|entry| entry.id());
+            if quorum_set.is_quorum(ids) {
+                quorum_accepted = entries[i].progress().clone();
+                break;
+            }
+        }
+
         entries.extend(learner_ids.into_iter().map(default_entry));
 
         let this = Self {
             quorum_set,
-            quorum_accepted: Default::default(),
+            quorum_accepted,
             voter_count,
             entries,
             stat: Default::default(),
@@ -386,6 +401,9 @@ where
 
     /// Return the greatest progress value accepted by the quorum set.
     ///
+    /// If no value has been accepted by any quorum, it returns
+    /// `Progress::default()`.
+    ///
     /// In Raft, this is the replication progress reached by enough voters to be
     /// considered committed once the term-specific commit rule also allows it.
     pub fn quorum_accepted(&self) -> &Entry::Progress {
@@ -410,35 +428,26 @@ where
     ///
     /// Entries whose IDs still exist in the new voter or learner set keep their
     /// previous progress and application data. New IDs are initialized through
-    /// `default_entry`.
+    /// `default_entry`. The quorum-accepted value is recomputed for the new
+    /// quorum set, so it may be lower than before the upgrade.
     pub fn upgrade_quorum_set(
         self,
         quorum_set: QS,
         learner_ids: impl IntoIterator<Item = Entry::Id>,
-        default_entry: impl FnMut(Entry::Id) -> Entry,
+        mut default_entry: impl FnMut(Entry::Id) -> Entry,
     ) -> Self {
-        let mut new_prog = Self::new(quorum_set, learner_ids, default_entry);
+        let mut old = self
+            .entries
+            .into_iter()
+            .map(|entry| (entry.id().clone(), entry))
+            .collect::<BTreeMap<_, _>>();
 
-        new_prog.stat = self.stat.clone();
+        let mut new_prog = Self::new(quorum_set, learner_ids, |id| {
+            old.remove(&id).unwrap_or_else(|| default_entry(id))
+        });
 
-        for item in self.into_iter() {
-            new_prog.replace(item);
-        }
-        new_prog.debug_assert_progress_valid();
+        new_prog.stat = self.stat;
         new_prog
-    }
-
-    /// Replace the entry for the same ID and update quorum-accepted progress.
-    fn replace(&mut self, entry: Entry) -> Option<&Entry::Progress> {
-        self.stat.update_count += 1;
-
-        let index = self.index(entry.id())?;
-
-        let prev_progress = self.entries[index].progress().clone();
-
-        self.entries[index] = entry;
-
-        Some(self.update_at(index, prev_progress))
     }
 
     /// Return whether the given ID is a voter.
@@ -874,6 +883,32 @@ mod tests {
         assert_eq!(Some(&0), progress.update_progress(&2, 10));
         assert_eq!(Some(&0), progress.update_progress(&4, 10));
         assert_eq!(Some(&10), progress.update_progress(&5, 10));
+    }
+
+    #[test]
+    fn vec_progress_new_computes_initial_quorum_accepted() {
+        // Entries may start above `Progress::default()`; the initial
+        // quorum-accepted value must reflect the actual initial progress.
+        let quorum_set = vec![btreeset! {1, 2, 3}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [4], |id| (id, id * 10));
+
+        assert_eq!(&20, progress.quorum_accepted());
+        assert_matches_model(&progress, "initial progress above default");
+
+        assert_eq!(Some(&30), progress.update_progress(&1, 100));
+        assert_eq!(Some(&100), progress.update_progress(&2, 100));
+        assert_eq!(Some(&100), progress.update_progress(&3, 100));
+        assert_matches_model(&progress, "updates after elevated initial progress");
+    }
+
+    #[test]
+    fn vec_progress_new_computes_initial_quorum_accepted_below_default() {
+        // A signed progress type may start below `Progress::default()`. The
+        // tracker must not report the never-accepted default value.
+        let quorum_set = vec![btreeset! {1, 2, 3}];
+        let progress = VecProgress::<(u64, i64), _>::new(quorum_set, [], |id| (id, -5));
+
+        assert_eq!(&-5, progress.quorum_accepted());
     }
 
     #[test]
