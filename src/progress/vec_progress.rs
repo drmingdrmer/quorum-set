@@ -388,22 +388,10 @@ where
         })
     }
 
-    /// Try to get the value by `id`.
-    pub fn try_get(&self, id: &Entry::Id) -> Option<&Entry> {
+    /// Get the entry by `id`.
+    pub fn get(&self, id: &Entry::Id) -> Option<&Entry> {
         let index = self.index(id)?;
         Some(&self.entries[index])
-    }
-
-    // TODO: merge `get` and `try_get`
-    /// Get the value by `id`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `id` is not in this progress tracker. Use [`try_get`](Self::try_get)
-    /// for a non-panicking variant.
-    pub fn get(&self, id: &Entry::Id) -> &Entry {
-        let index = self.index(id).unwrap();
-        &self.entries[index]
     }
 
     /// Get the greatest value that is accepted by the quorum set.
@@ -988,8 +976,8 @@ mod tests {
         );
         assert_eq!(Ok(&0), progress.update(&0, 5));
         assert_eq!(Ok(&5), progress.update(&1, 5));
-        assert_eq!(Some(&(0, 5)), progress.try_get(&0));
-        assert_eq!(Some(&(1, 5)), progress.try_get(&1));
+        assert_eq!(Some(&(0, 5)), progress.get(&0));
+        assert_eq!(Some(&(1, 5)), progress.get(&1));
         assert_eq!(&5, progress.quorum_accepted());
     }
 
@@ -1013,12 +1001,12 @@ mod tests {
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [6, 7], |id| (id, 0));
 
         progress.update(&6, 5).ok();
-        assert_eq!(&5, &progress.get(&6).1);
-        assert_eq!(Some(&5), progress.try_get(&6).map(|x| &x.1));
-        assert_eq!(None, progress.try_get(&9));
+        assert_eq!(Some(&(6, 5)), progress.get(&6));
+        assert_eq!(Some(&5), progress.get(&6).map(|x| &x.1));
+        assert_eq!(None, progress.get(&9));
 
         progress.update(&6, 10).ok();
-        assert_eq!(Some(&10), progress.try_get(&6).map(|x| &x.1));
+        assert_eq!(Some(&10), progress.get(&6).map(|x| &x.1));
     }
 
     #[test]
@@ -1140,12 +1128,12 @@ mod tests {
 
                 for step in 0..128 {
                     let id = next_random(&mut seed) % 8;
-                    let value = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default()
+                    let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
                         + next_random(&mut seed) % 7
                         + 1;
                     let got = copy_result(progress.update(&id, value));
                     let want = model_quorum_accepted(&progress.quorum_set, &progress.entries);
-                    let want_result = progress.try_get(&id).map(|_| want).ok_or(want);
+                    let want_result = progress.get(&id).map(|_| want).ok_or(want);
                     let context =
                         format!("case-{case_id} seed-{seed} step-{step} update-{id}-{value}");
 
@@ -1183,7 +1171,7 @@ mod tests {
             for round in 0..24 {
                 for step in 0..16 {
                     let id = next_random(&mut seed) % 10;
-                    let value = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default()
+                    let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
                         + next_random(&mut seed) % 11
                         + 1;
                     progress.update(&id, value).ok();
@@ -1338,12 +1326,12 @@ mod tests {
         assert_eq!(Ok(&4), got, "case 6: id:1, *=2");
 
         // Verify final values
-        assert_eq!(&4, &progress.get(&0).1);
-        assert_eq!(&4, &progress.get(&1).1);
-        assert_eq!(&3, &progress.get(&2).1);
-        assert_eq!(&2, &progress.get(&3).1);
-        assert_eq!(&5, &progress.get(&4).1);
-        assert_eq!(&0, &progress.get(&6).1);
+        assert_eq!(Some(&(0, 4)), progress.get(&0));
+        assert_eq!(Some(&(1, 4)), progress.get(&1));
+        assert_eq!(Some(&(2, 3)), progress.get(&2));
+        assert_eq!(Some(&(3, 2)), progress.get(&3));
+        assert_eq!(Some(&(4, 5)), progress.get(&4));
+        assert_eq!(Some(&(6, 0)), progress.get(&6));
 
         // Test nonexistent id returns Err with current quorum-accepted
         let got = progress.update_with(&9, |x| *x = 10);
@@ -1432,7 +1420,7 @@ mod tests {
             p012_345.quorum_accepted(),
             "quorum extended from 012 to 012_345, quorum-accepted falls back"
         );
-        assert_eq!(&9, &p012_345.get(&5).1, "inherit learner progress");
+        assert_eq!(Some(&(5, 9)), p012_345.get(&5), "inherit learner progress");
 
         // When quorum set shrinks, quorum-accepted becomes greater.
 
@@ -1447,7 +1435,7 @@ mod tests {
             p345.quorum_accepted(),
             "shrink quorum set, greater value becomes quorum-accepted"
         );
-        assert_eq!(&6, &p345.get(&1).1, "inherit voter progress");
+        assert_eq!(Some(&(1, 6)), p345.get(&1), "inherit voter progress");
     }
 
     #[test]
@@ -1529,9 +1517,9 @@ mod tests {
             }
         }
 
-        assert_eq!(&10, &progress.get(&1).1);
-        assert_eq!(&0, &progress.get(&0).1);
-        assert_eq!(&0, &progress.get(&2).1);
+        assert_eq!(Some(&(1, 10)), progress.get(&1));
+        assert_eq!(Some(&(0, 0)), progress.get(&0));
+        assert_eq!(Some(&(2, 0)), progress.get(&2));
     }
 
     #[test]
@@ -1620,15 +1608,15 @@ mod tests {
 
         // Increase from 0 to 5
         progress.increase_to(&1, 5).ok();
-        assert_eq!(&5, &progress.get(&1).1);
+        assert_eq!(Some(&(1, 5)), progress.get(&1));
 
         // Try to decrease from 5 to 3 - should not change
         progress.increase_to(&1, 3).ok();
-        assert_eq!(&5, &progress.get(&1).1);
+        assert_eq!(Some(&(1, 5)), progress.get(&1));
 
         // Increase from 5 to 7
         progress.increase_to(&1, 7).ok();
-        assert_eq!(&7, &progress.get(&1).1);
+        assert_eq!(Some(&(1, 7)), progress.get(&1));
 
         // Try with nonexistent id
         let result = progress.increase_to(&9, 10);
@@ -1737,7 +1725,7 @@ mod tests {
                     if (next_random(&mut seed) >> 32) % 8 == 0 {
                         progress.reset_entry_with(&id, |entry| entry.1 = 0);
                     } else {
-                        let value = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default()
+                        let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
                             + next_random(&mut seed) % 7
                             + 1;
                         progress.update(&id, value).ok();
