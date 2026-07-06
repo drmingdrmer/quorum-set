@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -9,6 +10,8 @@ use crate::quorum::QuorumSet;
 pub struct DisplayVecProgress<'a, Entry, QS, Fmt>
 where
     Entry: VecProgressEntry,
+    Entry::Id: Ord + Clone + Debug,
+    Entry::Progress: Debug,
     QS: QuorumSet<Id = Entry::Id>,
     Fmt: Fn(&mut Formatter<'_>, &Entry) -> std::fmt::Result,
 {
@@ -19,6 +22,8 @@ where
 impl<Entry, QS, Fmt> Display for DisplayVecProgress<'_, Entry, QS, Fmt>
 where
     Entry: VecProgressEntry,
+    Entry::Id: Ord + Clone + Debug,
+    Entry::Progress: Debug,
     QS: QuorumSet<Id = Entry::Id>,
     Fmt: Fn(&mut Formatter<'_>, &Entry) -> std::fmt::Result,
 {

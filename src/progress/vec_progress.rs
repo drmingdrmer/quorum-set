@@ -1,7 +1,13 @@
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::error::Error;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::slice::Iter;
 use std::slice::IterMut;
+
+use validit::Validate;
 
 use super::VecProgressEntry;
 use super::VecProgressEntryData;
@@ -34,7 +40,7 @@ where
 
     /// Progress data.
     ///
-    /// Elements with values greater than the `quorum_accepted` are sorted in descending order.
+    /// Elements with values greater than `quorum_accepted` are sorted in descending order.
     /// Others are unsorted.
     ///
     /// The first `voter_count` elements are voters, the left are learners.
@@ -69,6 +75,8 @@ where
 impl<Entry, QS> VecProgress<Entry, QS>
 where
     Entry: VecProgressEntry,
+    Entry::Id: Ord + Clone + Debug,
+    Entry::Progress: Debug,
     QS: QuorumSet<Id = Entry::Id>,
 {
     /// Create a progress tracker from quorum and learner IDs.
@@ -83,13 +91,15 @@ where
 
         entries.extend(learner_ids.into_iter().map(default_entry));
 
-        Self {
+        let this = Self {
             quorum_set,
             quorum_accepted: Default::default(),
             voter_count,
             entries,
             stat: Default::default(),
-        }
+        };
+        this.validate_initial_state().expect("VecProgress construction invariant violation");
+        this
     }
 
     /// Find the index of the specified id.
@@ -98,8 +108,7 @@ where
         self.entries.iter().position(|item| item.id() == target)
     }
 
-    /// Move an element at `index` up so that all the values greater than `quorum_accepted` are
-    /// sorted.
+    /// Move an element at `index` up so that voters stay sorted.
     #[inline(always)]
     fn move_up(&mut self, index: usize) -> usize {
         self.stat.move_count += 1;
@@ -114,8 +123,8 @@ where
         0
     }
 
-    /// Move a voter element at `index` down so that all the values greater than `quorum_accepted`
-    /// stay sorted after its progress value is lowered.
+    /// Move a voter element at `index` down so that voters stay sorted
+    /// after its progress value is lowered.
     ///
     /// It is the counterpart of [`Self::move_up`], used by [`Self::reset_entry_with()`].
     fn move_down(&mut self, index: usize) -> usize {
@@ -157,11 +166,19 @@ where
     where Fmt: Fn(&mut Formatter<'_>, &Entry) -> std::fmt::Result {
         DisplayVecProgress { inner: self, f }
     }
+
+    /// Validates progress-update invariants in debug builds.
+    fn debug_assert_progress_valid(&self) {
+        #[cfg(debug_assertions)]
+        self.validate().expect("VecProgress progress invariant violation");
+    }
 }
 
 impl<Entry, QS> VecProgress<Entry, QS>
 where
     Entry: VecProgressEntry,
+    Entry::Id: Ord + Clone + Debug,
+    Entry::Progress: Debug,
     QS: QuorumSet<Id = Entry::Id>,
 {
     /// Update one of the scalar values and re-calculate the quorum-accepted value.
@@ -286,6 +303,7 @@ where
                 index
             };
 
+        self.debug_assert_progress_valid();
         Some(&self.entries[new_index])
     }
 
@@ -298,12 +316,14 @@ where
 
         // No change, return early
         if &prev_progress == self.entries[index].progress() {
+            self.debug_assert_progress_valid();
             return Ok(&self.quorum_accepted);
         }
 
         // Learner does not grant a value.
         // And it won't be moved up to adjust the order.
         if index >= self.voter_count {
+            self.debug_assert_progress_valid();
             return Ok(&self.quorum_accepted);
         }
 
@@ -338,6 +358,7 @@ where
             }
         }
 
+        self.debug_assert_progress_valid();
         Ok(&self.quorum_accepted)
     }
 
@@ -423,6 +444,7 @@ where
         for item in self.into_iter() {
             new_prog.replace(item).ok();
         }
+        new_prog.debug_assert_progress_valid();
         new_prog
     }
 
@@ -456,12 +478,178 @@ where
     }
 }
 
+impl<Entry, QS> Validate for VecProgress<Entry, QS>
+where
+    Entry: VecProgressEntry,
+    Entry::Id: Ord + Clone + Debug,
+    Entry::Progress: Debug,
+    QS: QuorumSet<Id = Entry::Id>,
+{
+    /// Validates the voter-order invariant maintained after progress updates.
+    fn validate(&self) -> Result<(), Box<dyn Error>> {
+        self.validate_progress()
+    }
+}
+
+impl<Entry, QS> VecProgress<Entry, QS>
+where
+    Entry: VecProgressEntry,
+    Entry::Id: Ord + Clone + Debug,
+    Entry::Progress: Debug,
+    QS: QuorumSet<Id = Entry::Id>,
+{
+    /// Validates all construction-time invariants for a new `VecProgress`.
+    fn validate_initial_state(&self) -> Result<(), Box<dyn Error>> {
+        self.validate_voter_count()?;
+        self.validate_unique_entry_ids()?;
+        self.validate_quorum_membership()?;
+        self.validate_progress()?;
+
+        Ok(())
+    }
+
+    /// Validates the voter-order invariant affected by progress updates.
+    fn validate_progress(&self) -> Result<(), Box<dyn Error>> {
+        self.validate_voter_order()
+    }
+
+    /// Validates that `voter_count` partitions `entries` into a valid voter
+    /// prefix and learner suffix.
+    fn validate_voter_count(&self) -> Result<(), Box<dyn Error>> {
+        if self.voter_count > self.entries.len() {
+            return Err(invalid(format!(
+                "voter_count {} exceeds entry count {}",
+                self.voter_count,
+                self.entries.len()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Validates that every tracked entry ID is unique across both voters and
+    /// learners.
+    fn validate_unique_entry_ids(&self) -> Result<(), Box<dyn Error>> {
+        let mut positions = BTreeMap::<Entry::Id, Vec<usize>>::new();
+        for (i, entry) in self.entries.iter().enumerate() {
+            positions.entry(entry.id().clone()).or_default().push(i);
+        }
+
+        let duplicates = positions
+            .into_iter()
+            .filter(|(_, positions)| positions.len() > 1)
+            .collect::<BTreeMap<_, _>>();
+
+        if !duplicates.is_empty() {
+            return Err(invalid(format!("duplicate entry ids: {duplicates:?}")));
+        }
+
+        Ok(())
+    }
+
+    /// Validates that the quorum-set IDs exactly match the voter-entry IDs and
+    /// do not appear in the learner suffix.
+    fn validate_quorum_membership(&self) -> Result<(), Box<dyn Error>> {
+        let quorum_ids = self.quorum_set.ids().collect::<BTreeSet<_>>();
+        let voter_entry_ids = self.entries[..self.voter_count]
+            .iter()
+            .map(|entry| entry.id().clone())
+            .collect::<BTreeSet<_>>();
+        let learner_entry_ids = self.entries[self.voter_count..]
+            .iter()
+            .map(|entry| entry.id().clone())
+            .collect::<BTreeSet<_>>();
+
+        let missing_voter_ids =
+            quorum_ids.difference(&voter_entry_ids).cloned().collect::<BTreeSet<_>>();
+        let extra_voter_ids =
+            voter_entry_ids.difference(&quorum_ids).cloned().collect::<BTreeSet<_>>();
+        let learner_voter_ids =
+            learner_entry_ids.intersection(&quorum_ids).cloned().collect::<BTreeSet<_>>();
+
+        if quorum_ids.len() == self.voter_count
+            && missing_voter_ids.is_empty()
+            && extra_voter_ids.is_empty()
+            && learner_voter_ids.is_empty()
+        {
+            return Ok(());
+        }
+
+        Err(invalid(format!(
+            "quorum membership mismatch: quorum_ids={quorum_ids:?}, voter_entry_ids={voter_entry_ids:?}, learner_entry_ids={learner_entry_ids:?}, missing_voter_ids={missing_voter_ids:?}, extra_voter_ids={extra_voter_ids:?}, learner_voter_ids={learner_voter_ids:?}, voter_count={}",
+            self.voter_count
+        )))
+    }
+
+    /// Validates that voter entries whose progress is greater than
+    /// `quorum_accepted` form a descending prefix, reporting the first
+    /// out-of-order entry with the current voter and learner progress state.
+    fn validate_voter_order(&self) -> Result<(), Box<dyn Error>> {
+        let voters = &self.entries[..self.voter_count];
+        let progress_state = || {
+            let voter_progress = voters
+                .iter()
+                .map(|entry| (entry.id().clone(), entry.progress().clone()))
+                .collect::<Vec<_>>();
+            let learner_progress = self.entries[self.voter_count..]
+                .iter()
+                .map(|entry| (entry.id().clone(), entry.progress().clone()))
+                .collect::<Vec<_>>();
+
+            (voter_progress, learner_progress)
+        };
+
+        let suffix_start = voters
+            .iter()
+            .position(|entry| entry.progress() <= &self.quorum_accepted)
+            .unwrap_or(voters.len());
+
+        for (previous_index, pair) in voters[..suffix_start].windows(2).enumerate() {
+            let previous = &pair[0];
+            let item = &pair[1];
+            if previous.progress() < item.progress() {
+                let (voter_progress, learner_progress) = progress_state();
+                return Err(invalid(format!(
+                    "voter progress above quorum_accepted is not descending: quorum_accepted={:?}, previous_entry={:?}, out_of_order_entry={:?}, voter_progress={voter_progress:?}, learner_progress={learner_progress:?}",
+                    self.quorum_accepted,
+                    (previous_index, previous.id(), previous.progress()),
+                    (previous_index + 1, item.id(), item.progress())
+                )));
+            }
+        }
+
+        for (suffix_offset, item) in voters[suffix_start..].iter().enumerate() {
+            if item.progress() <= &self.quorum_accepted {
+                continue;
+            }
+
+            let index = suffix_start + suffix_offset;
+            let (voter_progress, learner_progress) = progress_state();
+            return Err(invalid(format!(
+                "voter progress above quorum_accepted appears after the unsorted suffix: quorum_accepted={:?}, out_of_order_entry={:?}, voter_progress={voter_progress:?}, learner_progress={learner_progress:?}",
+                self.quorum_accepted,
+                (index, item.id(), item.progress())
+            )));
+        }
+
+        Ok(())
+    }
+}
+
+fn invalid(message: impl Into<String>) -> Box<dyn Error> {
+    Box::new(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        message.into(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;
 
     use maplit::btreeset;
+    use validit::Validate;
 
     use super::VecProgress;
     use crate::Node;
@@ -638,16 +826,16 @@ mod tests {
     where QS: QuorumSet<Id = u64> {
         let quorum_accepted = *progress.quorum_accepted();
         let mut previous = None;
-        let mut seen_not_above_quorum = false;
+        let mut seen_unsorted_suffix = false;
 
         for item in &progress.entries[..progress.voter_count] {
             if item.1 <= quorum_accepted {
-                seen_not_above_quorum = true;
+                seen_unsorted_suffix = true;
                 continue;
             }
 
             assert!(
-                !seen_not_above_quorum,
+                !seen_unsorted_suffix,
                 "{}: non-prefix above-quorum entry: {:?}",
                 context, progress.entries
             );
@@ -661,6 +849,17 @@ mod tests {
             }
             previous = Some(item.1);
         }
+    }
+
+    fn assert_initial_invalid_contains<QS>(progress: &VecProgress<(u64, u64), QS>, want: &str)
+    where QS: QuorumSet<Id = u64> {
+        let err = progress.validate_initial_state().unwrap_err().to_string();
+        assert!(err.contains(want), "error: {err}");
+    }
+
+    fn assert_err_contains(err: Box<dyn std::error::Error>, want: &str) {
+        let err = err.to_string();
+        assert!(err.contains(want), "error: {err}");
     }
 
     #[test]
@@ -693,6 +892,89 @@ mod tests {
         assert_eq!(Ok(&0), progress.update(&2, 10));
         assert_eq!(Ok(&0), progress.update(&4, 10));
         assert_eq!(Ok(&10), progress.update(&5, 10));
+    }
+
+    #[test]
+    fn vec_progress_validate_rejects_duplicate_entry_ids() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
+
+        progress.entries[3].0 = 1;
+
+        assert!(progress.validate().is_ok());
+        assert_initial_invalid_contains(&progress, "duplicate entry id");
+        assert_initial_invalid_contains(&progress, "1: [1, 3]");
+    }
+
+    #[test]
+    fn vec_progress_validate_reports_membership_mismatches() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3, 4], |id| (id, 0));
+
+        progress.entries[0].0 = 9;
+        progress.entries[3].0 = 2;
+
+        let err = progress.validate_quorum_membership().unwrap_err();
+        assert_err_contains(err, "missing_voter_ids={0}");
+
+        let err = progress.validate_quorum_membership().unwrap_err();
+        assert_err_contains(err, "extra_voter_ids={9}");
+
+        let err = progress.validate_quorum_membership().unwrap_err();
+        assert_err_contains(err, "learner_voter_ids={2}");
+    }
+
+    #[test]
+    fn vec_progress_validate_reports_voter_order_mismatches() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
+
+        progress.quorum_accepted = 4;
+        progress.entries[0].1 = 7;
+        progress.entries[1].1 = 3;
+        progress.entries[2].1 = 6;
+        progress.entries[3].1 = 9;
+
+        let err = progress.validate_voter_order().unwrap_err().to_string();
+        assert!(
+            err.contains("appears after the unsorted suffix"),
+            "error: {err}"
+        );
+        assert!(err.contains("out_of_order_entry=(2, 2, 6)"), "error: {err}");
+        assert!(
+            err.contains("voter_progress=[(0, 7), (1, 3), (2, 6)]"),
+            "error: {err}"
+        );
+        assert!(err.contains("learner_progress=[(3, 9)]"), "error: {err}");
+
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
+
+        progress.quorum_accepted = 4;
+        progress.entries[0].1 = 5;
+        progress.entries[1].1 = 6;
+        progress.entries[3].1 = 9;
+
+        let err = progress.validate_voter_order().unwrap_err().to_string();
+        assert!(err.contains("previous_entry=(0, 0, 5)"), "error: {err}");
+        assert!(err.contains("out_of_order_entry=(1, 1, 6)"), "error: {err}");
+        assert!(
+            err.contains("voter_progress=[(0, 5), (1, 6), (2, 0)]"),
+            "error: {err}"
+        );
+        assert!(err.contains("learner_progress=[(3, 9)]"), "error: {err}");
+    }
+
+    #[test]
+    fn vec_progress_validate_accepts_reset_below_quorum_accepted() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
+
+        progress.update(&0, 10).unwrap();
+        progress.update(&1, 10).unwrap();
+        progress.reset_entry_with(&0, |entry| entry.1 = 0).unwrap();
+
+        assert!(progress.validate().is_ok());
     }
 
     #[test]
@@ -963,36 +1245,30 @@ mod tests {
     #[test]
     fn vec_progress_non_member_and_learner_edge_cases() {
         let quorum_set = vec![btreeset! {0, 1, 2}];
-        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [1, 3, 3], |id| (id, 0));
-
-        assert_eq!(
-            vec![(0, 0), (1, 0), (2, 0), (1, 0), (3, 0), (3, 0),],
-            progress.entries
+        assert!(
+            std::panic::catch_unwind(|| {
+                VecProgress::<(u64, u64), _>::new(quorum_set.clone(), [1, 3, 3], |id| (id, 0))
+            })
+            .is_err(),
+            "duplicate IDs are invalid"
         );
+
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
+
+        assert_eq!(vec![(0, 0), (1, 0), (2, 0), (3, 0)], progress.entries);
         assert_eq!(3, progress.voter_count);
         assert_eq!(Some(true), progress.is_voter(&1));
         assert_eq!(Some(false), progress.is_voter(&3));
         assert_eq!(None, progress.is_voter(&9));
 
         assert_eq!(Ok(0), copy_result(progress.update(&3, 7)));
-        assert_eq!(
-            vec![(0, 0), (1, 0), (2, 0), (1, 0), (3, 7), (3, 0),],
-            progress.entries,
-            "only the first duplicate learner is updated"
-        );
+        assert_eq!(vec![(0, 0), (1, 0), (2, 0), (3, 7)], progress.entries);
 
         assert_eq!(Ok(0), copy_result(progress.update(&1, 5)));
-        assert_eq!(
-            vec![(1, 5), (0, 0), (2, 0), (1, 0), (3, 7), (3, 0),],
-            progress.entries,
-            "a learner ID that is also a voter resolves to the voter entry"
-        );
+        assert_eq!(vec![(1, 5), (0, 0), (2, 0), (3, 7)], progress.entries);
 
         assert_eq!(Ok(4), copy_result(progress.update(&2, 4)));
-        assert_eq!(
-            vec![(1, 5), (2, 4), (0, 0), (1, 0), (3, 7), (3, 0),],
-            progress.entries
-        );
+        assert_eq!(vec![(1, 5), (2, 4), (0, 0), (3, 7)], progress.entries);
 
         let quorum_set = vec![btreeset! {0, 1, 2}];
         let mut no_learners = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
