@@ -17,10 +17,14 @@ fmt:
 clippy:
 	cargo clippy --no-deps --all-targets --features bench -- -D warnings
 
+coverage:
+	cargo llvm-cov --features bench --html --output-dir target/coverage
+	cargo llvm-cov report --summary-only --json --output-path target/coverage/summary.json
+
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps
 
 clean:
 	cargo clean
 
-.PHONY: all test build check lint fmt clippy doc clean
+.PHONY: all test build check lint fmt clippy coverage doc clean
