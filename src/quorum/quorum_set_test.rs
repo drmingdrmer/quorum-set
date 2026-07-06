@@ -115,7 +115,7 @@ fn test_arc_quorum_set_impl() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_quorum_tree_impl() -> anyhow::Result<()> {
+fn test_tree_impl() -> anyhow::Result<()> {
     let group_a = QuorumTree::new(2, [id(1), id(2), id(3)])?;
     let group_b = QuorumTree::new(2, [id(3), id(4), id(5)])?;
     let qset = QuorumTree::new(2, [Node::Subtree(group_a), Node::Subtree(group_b)])?;
@@ -132,7 +132,7 @@ fn test_quorum_tree_impl() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_quorum_tree_ids_dedupe_direct_and_nested_ids() -> anyhow::Result<()> {
+fn test_tree_ids_dedupe_direct_and_nested_ids() -> anyhow::Result<()> {
     let subtree = QuorumTree::new(2, [id(1), id(2), id(3)])?;
     let qset = QuorumTree::new(1, [Node::Id(1), Node::Subtree(subtree)])?;
 
@@ -142,7 +142,7 @@ fn test_quorum_tree_ids_dedupe_direct_and_nested_ids() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_quorum_tree_dedupes_candidate_ids() -> anyhow::Result<()> {
+fn test_tree_dedupes_candidate_ids() -> anyhow::Result<()> {
     let group_a = QuorumTree::new(2, [id(1), id(2), id(3)])?;
     let group_b = QuorumTree::new(2, [id(4), id(5), id(6)])?;
     let qset = QuorumTree::new(2, [Node::Subtree(group_a), Node::Subtree(group_b)])?;

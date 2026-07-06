@@ -68,7 +68,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_id_generation_for_quorum_tree() {
+    fn test_canonical_id_generation_for_tree() {
         let qset = QuorumTreeSpec::new(2, [set(1, &[3, 4]), id(5), set(1, &[1, 2])]).unwrap();
 
         assert_eq!(
@@ -92,7 +92,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_id_hashes_large_quorum_tree() {
+    fn test_canonical_id_hashes_large_tree() {
         let nested = QuorumTree::new(2, [set(1, &[9, 10]), id(11), set(1, &[7, 8])]).unwrap();
 
         assert_eq!(

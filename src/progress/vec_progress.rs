@@ -857,7 +857,7 @@ mod tests {
     }
 
     #[test]
-    fn vec_progress_new_with_quorum_tree() {
+    fn vec_progress_new_with_tree() {
         let group_a = QuorumTree::new(2, [Node::Id(1), Node::Id(2), Node::Id(3)]).unwrap();
         let group_b = QuorumTree::new(2, [Node::Id(4), Node::Id(5), Node::Id(6)]).unwrap();
         let quorum_set =

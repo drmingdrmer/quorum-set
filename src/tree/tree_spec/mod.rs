@@ -274,44 +274,44 @@ mod tests {
 
     #[test]
     fn test_joint() {
-        let read_quorum_tree =
+        let read_tree =
             QuorumTreeSpec::new(1, [raft_config(&[1, 2, 3]), raft_config(&[4, 5, 6])]).unwrap();
-        let write_quorum_tree =
+        let write_tree =
             QuorumTreeSpec::new(2, [raft_config(&[1, 2, 3]), raft_config(&[4, 5, 6])]).unwrap();
 
-        assert_eq!(1, read_quorum_tree.quorum_size());
-        assert_eq!(2, write_quorum_tree.quorum_size());
+        assert_eq!(1, read_tree.quorum_size());
+        assert_eq!(2, write_tree.quorum_size());
 
-        assert!(!read_quorum_tree.is_quorum(&[]));
-        assert!(!read_quorum_tree.is_quorum(&[1]));
-        assert!(!read_quorum_tree.is_quorum(&[1, 4]));
+        assert!(!read_tree.is_quorum(&[]));
+        assert!(!read_tree.is_quorum(&[1]));
+        assert!(!read_tree.is_quorum(&[1, 4]));
 
-        assert!(read_quorum_tree.is_quorum(&[1, 2]));
-        assert!(read_quorum_tree.is_quorum(&[4, 5]));
-        assert!(read_quorum_tree.is_quorum(&[1, 2, 4, 5]));
+        assert!(read_tree.is_quorum(&[1, 2]));
+        assert!(read_tree.is_quorum(&[4, 5]));
+        assert!(read_tree.is_quorum(&[1, 2, 4, 5]));
 
-        assert!(!write_quorum_tree.is_quorum(&[]));
-        assert!(!write_quorum_tree.is_quorum(&[1]));
-        assert!(!write_quorum_tree.is_quorum(&[1, 2]));
-        assert!(!write_quorum_tree.is_quorum(&[4, 5]));
-        assert!(!write_quorum_tree.is_quorum(&[1, 4]));
+        assert!(!write_tree.is_quorum(&[]));
+        assert!(!write_tree.is_quorum(&[1]));
+        assert!(!write_tree.is_quorum(&[1, 2]));
+        assert!(!write_tree.is_quorum(&[4, 5]));
+        assert!(!write_tree.is_quorum(&[1, 4]));
 
-        assert!(write_quorum_tree.is_quorum(&[1, 2, 4, 5]));
-        assert!(write_quorum_tree.is_quorum(&[1, 3, 4, 6]));
-        assert!(write_quorum_tree.is_quorum(&[1, 2, 3, 4, 5, 6]));
+        assert!(write_tree.is_quorum(&[1, 2, 4, 5]));
+        assert!(write_tree.is_quorum(&[1, 3, 4, 6]));
+        assert!(write_tree.is_quorum(&[1, 2, 3, 4, 5, 6]));
 
         assert_quorum_matches_raft_joint(
-            &write_quorum_tree,
+            &write_tree,
             vec![btreeset(&[1, 2, 3]), btreeset(&[4, 5, 6])],
             &[1, 2, 3, 4, 5, 6],
         );
 
-        let write_quorum_tree =
+        let write_tree =
             QuorumTreeSpec::new(2, [raft_config(&[1, 2, 3, 4]), raft_config(&[3, 4, 5, 6])])
                 .unwrap();
 
         assert_quorum_matches_raft_joint(
-            &write_quorum_tree,
+            &write_tree,
             vec![btreeset(&[1, 2, 3, 4]), btreeset(&[3, 4, 5, 6])],
             &[1, 2, 3, 4, 5, 6],
         );

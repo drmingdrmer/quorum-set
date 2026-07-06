@@ -1,10 +1,11 @@
 pub use canonical_id::CanonicalId;
 pub use quorum_node::Node;
-pub use quorum_tree::QuorumTree;
-pub use quorum_tree_error::QuorumTreeError;
+pub use tree::QuorumTree;
+pub use tree_error::QuorumTreeError;
 
 mod canonical_id;
 mod quorum_node;
-mod quorum_tree;
-mod quorum_tree_error;
-mod quorum_tree_spec;
+#[allow(clippy::module_inception)]
+mod tree;
+mod tree_error;
+mod tree_spec;

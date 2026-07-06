@@ -3,7 +3,7 @@ use std::fmt;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use super::quorum_tree_spec::QuorumTreeSpec;
+use super::tree_spec::QuorumTreeSpec;
 use crate::CanonicalId;
 use crate::Node;
 use crate::QuorumTreeError;
