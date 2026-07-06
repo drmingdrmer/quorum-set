@@ -1,5 +1,7 @@
 use std::collections::BTreeSet;
 
+use crate::Node;
+use crate::QuorumTree;
 use crate::quorum::quorum_set::QuorumSet;
 
 /// Impl a simple majority quorum set
@@ -12,8 +14,8 @@ where ID: PartialOrd + Ord + Clone + 'static
     fn is_quorum<'a, I: Iterator<Item = &'a ID> + Clone>(&self, ids: I) -> bool {
         let mut count = 0;
         let limit = self.len();
-        for id in ids {
-            if self.contains(id) {
+        for id in self {
+            if ids.clone().any(|candidate| candidate == id) {
                 count += 2;
                 if count > limit {
                     return true;
@@ -53,28 +55,34 @@ where NID: PartialOrd + Ord + Clone + 'static
     }
 }
 
-/// Impl a simple majority quorum set
-impl<ID> QuorumSet for &[ID]
-where ID: PartialOrd + Ord + Copy + 'static
+/// Impl a hierarchical quorum set.
+impl<ID> QuorumSet for QuorumTree<ID>
+where ID: Ord + Clone + 'static
 {
     type Id = ID;
     type Iter = std::collections::btree_set::IntoIter<ID>;
 
     fn is_quorum<'a, I: Iterator<Item = &'a ID> + Clone>(&self, ids: I) -> bool {
-        let mut count = 0;
-        let limit = self.len();
-        for id in ids {
-            if self.contains(id) {
-                count += 2;
-                if count > limit {
-                    return true;
-                }
-            }
-        }
-        false
+        self.spec.is_quorum(ids)
     }
 
     fn ids(&self) -> Self::Iter {
-        BTreeSet::from_iter(self.iter().copied()).into_iter()
+        let mut ids = BTreeSet::new();
+        collect_tree_ids(self, &mut ids);
+        ids.into_iter()
+    }
+}
+
+fn collect_tree_ids<ID>(tree: &QuorumTree<ID>, ids: &mut BTreeSet<ID>)
+where ID: Ord + Clone {
+    for node in tree.children() {
+        match node {
+            Node::Id(id) => {
+                ids.insert(id.clone());
+            }
+            Node::Subtree(subtree) => {
+                collect_tree_ids(subtree, ids);
+            }
+        }
     }
 }

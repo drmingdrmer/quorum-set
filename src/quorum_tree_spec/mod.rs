@@ -56,7 +56,11 @@ where ID: Ord
         self.nodes.iter()
     }
 
-    pub(crate) fn is_quorum(&self, ids: &[ID]) -> bool {
+    pub(crate) fn is_quorum<'a, I>(&self, ids: I) -> bool
+    where
+        ID: 'a,
+        I: IntoIterator<Item = &'a ID> + Clone,
+    {
         let required = self.quorum_size();
         if required == 0 {
             return true;
@@ -64,7 +68,7 @@ where ID: Ord
 
         let mut count = 0;
         for node in &self.nodes {
-            if node.is_selected_by(ids) {
+            if node.is_selected_by(ids.clone()) {
                 count += 1;
             }
             if count >= required {

@@ -31,10 +31,14 @@ where ID: Ord
     ///
     /// A leaf node is selected when its ID is present in `ids`. A nested tree is
     /// selected when `ids` satisfy that tree.
-    pub fn is_selected_by(&self, ids: &[ID]) -> bool {
+    pub(crate) fn is_selected_by<'a, I>(&self, ids: I) -> bool
+    where
+        ID: 'a,
+        I: IntoIterator<Item = &'a ID> + Clone,
+    {
         match self {
-            Node::Id(id) => ids.contains(id),
-            Node::Subtree(m) => m.is_quorum(ids),
+            Node::Id(id) => ids.into_iter().any(|candidate| candidate == id),
+            Node::Subtree(m) => m.spec.is_quorum(ids),
         }
     }
 }

@@ -57,7 +57,7 @@ where ID: Ord
     /// # Examples
     ///
     /// ```
-    /// use quorum_tree::{Node, QuorumTree, QuorumTreeError};
+    /// use quorum_tree::{Node, QuorumSet, QuorumTree, QuorumTreeError};
     ///
     /// let tree = QuorumTree::new(2, [
     ///     Node::Id(1),
@@ -65,8 +65,8 @@ where ID: Ord
     ///     Node::Id(3),
     /// ]).unwrap();
     ///
-    /// assert!(tree.is_quorum(&[1, 2]));
-    /// assert!(!tree.is_quorum(&[1]));
+    /// assert!(tree.is_quorum([1, 2].iter()));
+    /// assert!(!tree.is_quorum([1].iter()));
     ///
     /// let err = QuorumTree::new(1, [Node::Id(1), Node::Id(1)]).unwrap_err();
     /// assert_eq!(
@@ -97,14 +97,6 @@ where ID: Ord
     /// Children are unique: construction rejects duplicate child nodes.
     pub fn children(&self) -> impl Iterator<Item = &Node<ID>> {
         self.spec.children()
-    }
-
-    /// Returns whether `ids` satisfy this quorum tree.
-    ///
-    /// Each child node can contribute at most one selected child. Repeating the
-    /// same ID in `ids` does not increase the selected count.
-    pub fn is_quorum(&self, ids: &[ID]) -> bool {
-        self.spec.is_quorum(ids)
     }
 
     /// Returns the canonical ID of this tree.

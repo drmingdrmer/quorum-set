@@ -4,11 +4,13 @@ use maplit::btreeset;
 use test::Bencher;
 use test::black_box;
 
+use crate::Node;
+use crate::QuorumTree;
 use crate::quorum::QuorumSet;
 
 #[bench]
-fn quorum_set_slice_ids_slice(b: &mut Bencher) {
-    let m12345: &[usize] = &[1, 2, 3, 4, 5];
+fn quorum_set_quorum_tree_ids_slice(b: &mut Bencher) {
+    let m12345 = QuorumTree::new(3, [1, 2, 3, 4, 5].map(Node::Id)).unwrap();
     let x = [1, 2, 3, 6, 7];
     b.iter(|| m12345.is_quorum(black_box(x.iter())))
 }

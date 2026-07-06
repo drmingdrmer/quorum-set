@@ -34,7 +34,7 @@ duplicate child node or on a `quorum_size` larger than the number of children.
 ## Usage
 
 ```rust
-use quorum_tree::{Node, QuorumTree};
+use quorum_tree::{Node, QuorumSet, QuorumTree};
 
 let read_quorum = QuorumTree::new(1, [
     Node::Id(1),
@@ -48,9 +48,9 @@ let write_quorum = QuorumTree::new(3, [
     Node::Id(3),
 ]).unwrap();
 
-assert!(read_quorum.is_quorum(&[1]));
-assert!(!write_quorum.is_quorum(&[1, 2]));
-assert!(write_quorum.is_quorum(&[1, 2, 3]));
+assert!(read_quorum.is_quorum([1].iter()));
+assert!(!write_quorum.is_quorum([1, 2].iter()));
+assert!(write_quorum.is_quorum([1, 2, 3].iter()));
 ```
 
 In this example, a read quorum can be a single node, and the only write quorum
@@ -60,7 +60,7 @@ quorum, even though read quorums do not intersect with each other.
 The simpler setup is to use the same majority tree for reads and writes:
 
 ```rust
-use quorum_tree::{Node, QuorumTree};
+use quorum_tree::{Node, QuorumSet, QuorumTree};
 
 let read_quorum = QuorumTree::new(2, [
     Node::Id(1),
@@ -70,8 +70,8 @@ let read_quorum = QuorumTree::new(2, [
 
 let write_quorum = read_quorum.clone();
 
-assert!(read_quorum.is_quorum(&[1, 2]));
-assert!(write_quorum.is_quorum(&[2, 3]));
+assert!(read_quorum.is_quorum([1, 2].iter()));
+assert!(write_quorum.is_quorum([2, 3].iter()));
 ```
 
 For a flat tree, setting `quorum_size` to at least `nodes.len() / 2 + 1` gives
@@ -83,7 +83,7 @@ Nested trees model grouped layouts. This example selects a write quorum only
 when both groups have a local majority:
 
 ```rust
-use quorum_tree::{Node, QuorumTree};
+use quorum_tree::{Node, QuorumSet, QuorumTree};
 
 fn id(i: u64) -> Node<u64> {
     Node::Id(i)
@@ -98,8 +98,8 @@ let write_quorum = QuorumTree::new(2, [
     group([4, 5, 6]),
 ]).unwrap();
 
-assert!(write_quorum.is_quorum(&[1, 2, 4, 5]));
-assert!(!write_quorum.is_quorum(&[1, 2, 4]));
+assert!(write_quorum.is_quorum([1, 2, 4, 5].iter()));
+assert!(!write_quorum.is_quorum([1, 2, 4].iter()));
 ```
 
 ## Canonical IDs
