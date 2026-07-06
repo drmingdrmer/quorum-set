@@ -104,7 +104,7 @@ where
 
     /// Find the index of the specified id.
     #[inline(always)]
-    pub fn index(&self, target: &Entry::Id) -> Option<usize> {
+    fn index(&self, target: &Entry::Id) -> Option<usize> {
         self.entries.iter().position(|item| item.id() == target)
     }
 
@@ -144,16 +144,10 @@ where
     ///
     /// Mutating progress values through this iterator can leave the internal
     /// ordering and quorum-accepted value stale. Normal progress updates must
-    /// use `update()`, `update_with()`, or `update_entry_with()` instead.
+    /// use [`Self::update_progress()`] or [`Self::update_entry_with()`] instead.
     /// Mutating entry IDs can corrupt membership lookup.
     pub fn iter_mut_without_reorder(&mut self) -> IterMut<'_, Entry> {
         self.entries.iter_mut()
-    }
-
-    /// Consume this progress tracker and return its entries.
-    #[allow(clippy::should_implement_trait)]
-    pub fn into_iter(self) -> impl Iterator<Item = Entry> {
-        self.entries.into_iter()
     }
 
     #[cfg(test)]
@@ -208,14 +202,14 @@ where
     ///
     /// the quorum-accepted is `3` and assumes a majority quorum set is used.
     /// Then:
-    /// - update(a, 6): nothing to do: quorum-accepted is still 3;
-    /// - update(b, 4): re-calc:       quorum-accepted becomes 4;
-    /// - update(b, 6): re-calc:       quorum-accepted becomes 5;
-    /// - update(c, 2): nothing to do: quorum-accepted is still 3;
-    /// - update(c, 3): nothing to do: quorum-accepted is still 3;
-    /// - update(c, 4): re-calc:       quorum-accepted becomes 4;
-    /// - update(c, 6): re-calc:       quorum-accepted becomes 5;
-    pub fn update_with<F>(
+    /// - update_progress(a, 6): nothing to do: quorum-accepted is still 3;
+    /// - update_progress(b, 4): re-calc:       quorum-accepted becomes 4;
+    /// - update_progress(b, 6): re-calc:       quorum-accepted becomes 5;
+    /// - update_progress(c, 2): nothing to do: quorum-accepted is still 3;
+    /// - update_progress(c, 3): nothing to do: quorum-accepted is still 3;
+    /// - update_progress(c, 4): re-calc:       quorum-accepted becomes 4;
+    /// - update_progress(c, 6): re-calc:       quorum-accepted becomes 5;
+    fn update_progress_with<F>(
         &mut self,
         id: &Entry::Id,
         f: F,
@@ -260,7 +254,7 @@ where
     /// Update application-owned data without recalculating quorum-accepted progress.
     ///
     /// This method only exposes [`VecProgressEntryData::Data`], so it cannot
-    /// change progress or invalidate the ordering maintained by `VecProgress`.
+    /// change progress or invalidate the ordering maintained by [`VecProgress`].
     ///
     /// It returns the updated data after update if the `id` is found, otherwise returns `None`.
     pub fn update_data_with<F>(&mut self, id: &Entry::Id, f: F) -> Option<&Entry::Data>
@@ -365,12 +359,12 @@ where
     /// Update one of the scalar values and re-calculate the quorum-accepted value.
     ///
     /// It returns `Err(quorum_accepted)` if the `id` is not found.
-    pub fn update(
+    pub fn update_progress(
         &mut self,
         id: &Entry::Id,
         value: Entry::Progress,
     ) -> Result<&Entry::Progress, &Entry::Progress> {
-        self.update_with(id, |x| *x = value)
+        self.update_progress_with(id, |x| *x = value)
     }
 
     /// Update the value if the new value is greater than the current value.
@@ -381,7 +375,7 @@ where
         id: &Entry::Id,
         value: Entry::Progress,
     ) -> Result<&Entry::Progress, &Entry::Progress> {
-        self.update_with(id, |x| {
+        self.update_progress_with(id, |x| {
             if value > *x {
                 *x = value;
             }
@@ -399,8 +393,7 @@ where
     /// In raft or other distributed consensus,
     /// To commit a value, the value has to be **accepted by a quorum** and has to be the greatest
     /// value every proposed.
-    #[cfg(test)]
-    pub(crate) fn quorum_accepted(&self) -> &Entry::Progress {
+    pub fn quorum_accepted(&self) -> &Entry::Progress {
         &self.quorum_accepted
     }
 
@@ -459,10 +452,23 @@ where
     /// A voter is a node in the quorum set that can grant a value.
     /// A learner's progress is also tracked, but it will never grant a value.
     ///
-    /// If the given id is not in this `VecProgress`, it returns `None`.
+    /// If the given id is not in this [`VecProgress`], it returns `None`.
     pub fn is_voter(&self, id: &Entry::Id) -> Option<bool> {
         let index = self.index(id)?;
         Some(index < self.voter_count)
+    }
+}
+
+impl<Entry, QS> IntoIterator for VecProgress<Entry, QS>
+where
+    Entry: VecProgressEntry,
+    QS: QuorumSet<Id = Entry::Id>,
+{
+    type Item = Entry;
+    type IntoIter = std::vec::IntoIter<Entry>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.into_iter()
     }
 }
 
@@ -486,7 +492,7 @@ where
     Entry::Progress: Debug,
     QS: QuorumSet<Id = Entry::Id>,
 {
-    /// Validates all construction-time invariants for a new `VecProgress`.
+    /// Validates all construction-time invariants for a new [`VecProgress`].
     fn validate_initial_state(&self) -> Result<(), Box<dyn Error>> {
         self.validate_voter_count()?;
         self.validate_unique_entry_ids()?;
@@ -806,7 +812,7 @@ mod tests {
         assert_voter_prefix_is_sorted(progress, context);
     }
 
-    /// Assert the voter ordering invariant maintained by `update()`.
+    /// Assert the voter ordering invariant maintained by `update_progress()`.
     ///
     /// Voter entries above `quorum_accepted` must form a descending prefix.
     /// Learners are excluded because learner progress does not grant quorum.
@@ -876,10 +882,10 @@ mod tests {
         );
         assert_eq!(6, progress.voter_count);
 
-        assert_eq!(Ok(&0), progress.update(&1, 10));
-        assert_eq!(Ok(&0), progress.update(&2, 10));
-        assert_eq!(Ok(&0), progress.update(&4, 10));
-        assert_eq!(Ok(&10), progress.update(&5, 10));
+        assert_eq!(Ok(&0), progress.update_progress(&1, 10));
+        assert_eq!(Ok(&0), progress.update_progress(&2, 10));
+        assert_eq!(Ok(&0), progress.update_progress(&4, 10));
+        assert_eq!(Ok(&10), progress.update_progress(&5, 10));
     }
 
     #[test]
@@ -958,8 +964,8 @@ mod tests {
         let quorum_set = vec![btreeset! {0, 1, 2}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
 
-        progress.update(&0, 10).unwrap();
-        progress.update(&1, 10).unwrap();
+        progress.update_progress(&0, 10).unwrap();
+        progress.update_progress(&1, 10).unwrap();
         progress.reset_entry_with(&0, |entry| entry.1 = 0).unwrap();
 
         assert!(progress.validate().is_ok());
@@ -974,8 +980,8 @@ mod tests {
             vec![(0, 0), (1, 0), (2, 0), (3, 0)],
             progress.iter().cloned().collect::<Vec<_>>()
         );
-        assert_eq!(Ok(&0), progress.update(&0, 5));
-        assert_eq!(Ok(&5), progress.update(&1, 5));
+        assert_eq!(Ok(&0), progress.update_progress(&0, 5));
+        assert_eq!(Ok(&5), progress.update_progress(&1, 5));
         assert_eq!(Some(&(0, 5)), progress.get(&0));
         assert_eq!(Some(&(1, 5)), progress.get(&1));
         assert_eq!(&5, progress.quorum_accepted());
@@ -1000,12 +1006,12 @@ mod tests {
         let quorum_set = vec![btreeset! {0, 1, 2, 3, 4}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [6, 7], |id| (id, 0));
 
-        progress.update(&6, 5).ok();
+        progress.update_progress(&6, 5).ok();
         assert_eq!(Some(&(6, 5)), progress.get(&6));
         assert_eq!(Some(&5), progress.get(&6).map(|x| &x.1));
         assert_eq!(None, progress.get(&9));
 
-        progress.update(&6, 10).ok();
+        progress.update_progress(&6, 10).ok();
         assert_eq!(Some(&10), progress.get(&6).map(|x| &x.1));
     }
 
@@ -1014,9 +1020,9 @@ mod tests {
         let quorum_set = vec![btreeset! {0, 1, 2, 3, 4}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [6, 7], |id| (id, 0));
 
-        progress.update(&7, 7).ok();
-        progress.update(&3, 3).ok();
-        progress.update(&1, 1).ok();
+        progress.update_progress(&7, 7).ok();
+        progress.update_progress(&3, 3).ok();
+        progress.update_progress(&1, 1).ok();
 
         assert_eq!(
             vec![(3, 3), (1, 1), (0, 0), (2, 0), (4, 0), (6, 0), (7, 7),],
@@ -1078,7 +1084,7 @@ mod tests {
     }
 
     #[test]
-    fn vec_progress_update() {
+    fn vec_progress_update_progress() {
         let quorum_set = vec![btreeset! {0, 1, 2, 3, 4}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [6], |id| (id, 0));
 
@@ -1097,7 +1103,7 @@ mod tests {
         ];
 
         for (ith, ((id, v), want_quorum_accepted)) in cases.iter().enumerate() {
-            let got = progress.update_with(id, |x| *x = *v);
+            let got = progress.update_progress_with(id, |x| *x = *v);
             assert_eq!(
                 want_quorum_accepted.clone(),
                 got,
@@ -1131,7 +1137,7 @@ mod tests {
                     let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
                         + next_random(&mut seed) % 7
                         + 1;
-                    let got = copy_result(progress.update(&id, value));
+                    let got = copy_result(progress.update_progress(&id, value));
                     let want = model_quorum_accepted(&progress.quorum_set, &progress.entries);
                     let want_result = progress.get(&id).map(|_| want).ok_or(want);
                     let context =
@@ -1174,7 +1180,7 @@ mod tests {
                     let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
                         + next_random(&mut seed) % 11
                         + 1;
-                    progress.update(&id, value).ok();
+                    progress.update_progress(&id, value).ok();
                     assert_matches_model(
                         &progress,
                         &format!("seed-{seed} round-{round} step-{step} update"),
@@ -1195,7 +1201,7 @@ mod tests {
     }
 
     #[test]
-    fn vec_progress_joint_quorum_update() {
+    fn vec_progress_joint_quorum_update_progress() {
         let quorum_set = vec![btreeset! {0, 1, 2}, btreeset! {2, 3, 4}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [5, 6], |id| (id, 0));
 
@@ -1211,7 +1217,7 @@ mod tests {
         ];
 
         for (ith, (id, value, want_quorum_accepted)) in cases.iter().enumerate() {
-            let got = copy_result(progress.update(id, *value));
+            let got = copy_result(progress.update_progress(id, *value));
             let context = format!("{ith}-th case: id:{id}, value:{value}");
 
             assert_eq!(
@@ -1249,13 +1255,13 @@ mod tests {
         assert_eq!(Some(false), progress.is_voter(&3));
         assert_eq!(None, progress.is_voter(&9));
 
-        assert_eq!(Ok(0), copy_result(progress.update(&3, 7)));
+        assert_eq!(Ok(0), copy_result(progress.update_progress(&3, 7)));
         assert_eq!(vec![(0, 0), (1, 0), (2, 0), (3, 7)], progress.entries);
 
-        assert_eq!(Ok(0), copy_result(progress.update(&1, 5)));
+        assert_eq!(Ok(0), copy_result(progress.update_progress(&1, 5)));
         assert_eq!(vec![(1, 5), (0, 0), (2, 0), (3, 7)], progress.entries);
 
-        assert_eq!(Ok(4), copy_result(progress.update(&2, 4)));
+        assert_eq!(Ok(4), copy_result(progress.update_progress(&2, 4)));
         assert_eq!(vec![(1, 5), (2, 4), (0, 0), (3, 7)], progress.entries);
 
         let quorum_set = vec![btreeset! {0, 1, 2}];
@@ -1263,7 +1269,7 @@ mod tests {
 
         assert_eq!(vec![(0, 0), (1, 0), (2, 0)], no_learners.entries);
         assert_eq!(3, no_learners.voter_count);
-        assert_eq!(Err(0), copy_result(no_learners.update(&9, 5)));
+        assert_eq!(Err(0), copy_result(no_learners.update_progress(&9, 5)));
         assert_eq!(vec![(0, 0), (1, 0), (2, 0)], no_learners.entries);
     }
 
@@ -1272,57 +1278,57 @@ mod tests {
         let quorum_set = RequiredSetQuorum::new([0, 1, 2, 3], [0, 3]);
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
 
-        assert_eq!(Ok(0), copy_result(progress.update(&1, 10)));
-        assert_eq!(Ok(0), copy_result(progress.update(&2, 9)));
-        assert_eq!(Ok(0), copy_result(progress.update(&0, 8)));
+        assert_eq!(Ok(0), copy_result(progress.update_progress(&1, 10)));
+        assert_eq!(Ok(0), copy_result(progress.update_progress(&2, 9)));
+        assert_eq!(Ok(0), copy_result(progress.update_progress(&0, 8)));
         assert_matches_model(&progress, "custom quorum before required set is reached");
 
         assert_eq!(vec![(1, 10), (2, 9), (0, 8), (3, 0)], progress.entries);
 
-        assert_eq!(Ok(7), copy_result(progress.update(&3, 7)));
+        assert_eq!(Ok(7), copy_result(progress.update_progress(&3, 7)));
         assert_eq!(&7, progress.quorum_accepted());
         assert_matches_model(&progress, "custom quorum reaches required set");
 
-        assert_eq!(Ok(8), copy_result(progress.update(&3, 11)));
+        assert_eq!(Ok(8), copy_result(progress.update_progress(&3, 11)));
         assert_eq!(vec![(3, 11), (1, 10), (2, 9), (0, 8)], progress.entries);
         assert_matches_model(&progress, "custom quorum follows required set threshold");
     }
 
     #[test]
-    fn vec_progress_update_with() {
+    fn vec_progress_update_progress_with() {
         let quorum_set = vec![btreeset! {0, 1, 2, 3, 4}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [6], |id| (id, 0));
 
-        // Test that update_with can use closures to modify values
+        // Test that update_progress_with can use closures to modify values
         // Case 0: 0,2,0,0,0,0
-        let got = progress.update_with(&1, |x| *x += 2);
+        let got = progress.update_progress_with(&1, |x| *x += 2);
         assert_eq!(Ok(&0), got, "case 0: id:1, +=2");
 
         // Case 1: 0,2,3,0,0,0
-        let got = progress.update_with(&2, |x| *x += 3);
+        let got = progress.update_progress_with(&2, |x| *x += 3);
         assert_eq!(Ok(&0), got, "case 1: id:2, +=3");
 
         // Case 2: 0,2,3,1,0,0
-        let got = progress.update_with(&3, |x| *x = 1);
+        let got = progress.update_progress_with(&3, |x| *x = 1);
         assert_eq!(Ok(&1), got, "case 2: id:3, =1");
 
         // Case 3: 0,2,3,1,5,0
-        let got = progress.update_with(&4, |x| *x += 5);
+        let got = progress.update_progress_with(&4, |x| *x += 5);
         assert_eq!(Ok(&2), got, "case 3: id:4, +5");
 
         // Case 4: 4,2,3,1,5,0 - closure can see updated value
-        let got = progress.update_with(&0, |x| {
+        let got = progress.update_progress_with(&0, |x| {
             *x += 4;
             assert_eq!(4, *x, "closure sees the updated value");
         });
         assert_eq!(Ok(&3), got, "case 4: id:0, +=4");
 
         // Case 5: 4,2,3,2,5,0 - using max
-        let got = progress.update_with(&3, |x| *x = (*x).max(2));
+        let got = progress.update_progress_with(&3, |x| *x = (*x).max(2));
         assert_eq!(Ok(&3), got, "case 5: id:3, max(2)");
 
         // Case 6: 4,4,3,2,5,0
-        let got = progress.update_with(&1, |x| *x *= 2);
+        let got = progress.update_progress_with(&1, |x| *x *= 2);
         assert_eq!(Ok(&4), got, "case 6: id:1, *=2");
 
         // Verify final values
@@ -1334,7 +1340,7 @@ mod tests {
         assert_eq!(Some(&(6, 0)), progress.get(&6));
 
         // Test nonexistent id returns Err with current quorum-accepted
-        let got = progress.update_with(&9, |x| *x = 10);
+        let got = progress.update_progress_with(&9, |x| *x = 10);
         assert_eq!(Err(&4), got, "nonexistent id returns Err");
     }
 
@@ -1346,7 +1352,7 @@ mod tests {
                 IdValData::new(id, 0, "foo")
             });
 
-        assert_eq!(Ok(&0), progress.update(&1, 2));
+        assert_eq!(Ok(&0), progress.update_progress(&1, 2));
 
         let stats_before = (
             progress.stat().update_count,
@@ -1390,10 +1396,10 @@ mod tests {
 
         assert_eq!(Some(5), progress.index(&6));
 
-        progress.update(&6, 6).ok();
+        progress.update_progress(&6, 6).ok();
         assert_eq!(Some(5), progress.index(&6), "learner is not moved");
 
-        progress.update(&4, 4).ok();
+        progress.update_progress(&4, 4).ok();
         assert_eq!(Some(0), progress.index(&4), "voter is not moved");
     }
 
@@ -1407,9 +1413,9 @@ mod tests {
 
         let mut p012 = VecProgress::<(u64, u64), _>::new(qs012, [5], |id| (id, 0));
 
-        p012.update(&0, 5).ok();
-        p012.update(&1, 6).ok();
-        p012.update(&5, 9).ok();
+        p012.update_progress(&0, 5).ok();
+        p012.update_progress(&1, 6).ok();
+        p012.update_progress(&5, 9).ok();
         assert_eq!(&5, p012.quorum_accepted());
 
         // After upgrading to a bigger quorum set, quorum-accepted fall back to 0
@@ -1424,8 +1430,8 @@ mod tests {
 
         // When quorum set shrinks, quorum-accepted becomes greater.
 
-        p012_345.update(&3, 7).ok();
-        p012_345.update(&4, 8).ok();
+        p012_345.update_progress(&3, 7).ok();
+        p012_345.update_progress(&4, 8).ok();
         assert_eq!(&5, p012_345.quorum_accepted());
 
         let p345 = p012_345.upgrade_quorum_set(qs345, [1], |id| (id, 0));
@@ -1447,7 +1453,7 @@ mod tests {
         let mut p = VecProgress::<(u64, u64), _>::new(qs01234, [5], |id| (id, 0));
 
         for (id, value) in [(0, 9), (1, 8), (2, 7), (3, 2), (4, 1), (5, 10)] {
-            p.update(&id, value).ok();
+            p.update_progress(&id, value).ok();
         }
 
         assert_eq!(&7, p.quorum_accepted());
@@ -1466,8 +1472,8 @@ mod tests {
         );
         assert_matches_model(&joint, "after upgrade to joint quorum");
 
-        joint.update(&3, 8).ok();
-        joint.update(&4, 8).ok();
+        joint.update_progress(&3, 8).ok();
+        joint.update_progress(&4, 8).ok();
         assert_eq!(&8, joint.quorum_accepted());
         assert_matches_model(&joint, "after joint quorum catches up");
 
@@ -1495,8 +1501,8 @@ mod tests {
         let quorum_set = vec![btreeset! {0, 1, 2}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
 
-        progress.update(&1, 5).ok();
-        progress.update(&2, 3).ok();
+        progress.update_progress(&1, 5).ok();
+        progress.update_progress(&2, 3).ok();
 
         let display = format!(
             "{}",
@@ -1536,7 +1542,7 @@ mod tests {
             )
         );
 
-        progress.update(&3, 10).ok();
+        progress.update_progress(&3, 10).ok();
         assert_eq!(
             (1, 0, 0),
             (
@@ -1546,7 +1552,7 @@ mod tests {
             )
         );
 
-        progress.update(&1, 5).ok();
+        progress.update_progress(&1, 5).ok();
         assert_eq!(
             (2, 1, 1),
             (
@@ -1556,7 +1562,7 @@ mod tests {
             )
         );
 
-        progress.update(&2, 4).ok();
+        progress.update_progress(&2, 4).ok();
         assert_eq!(
             (3, 2, 2),
             (
@@ -1566,7 +1572,7 @@ mod tests {
             )
         );
 
-        progress.update(&1, 6).ok();
+        progress.update_progress(&1, 6).ok();
         assert_eq!(
             (4, 3, 2),
             (
@@ -1576,7 +1582,7 @@ mod tests {
             )
         );
 
-        progress.update(&9, 7).ok();
+        progress.update_progress(&9, 7).ok();
         assert_eq!(
             (5, 3, 2),
             (
@@ -1592,8 +1598,8 @@ mod tests {
         let quorum_set = vec![btreeset! {0, 1, 2}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
 
-        progress.update(&1, 5).ok();
-        progress.update(&2, 3).ok();
+        progress.update_progress(&1, 5).ok();
+        progress.update_progress(&2, 3).ok();
 
         let display = progress.display_with(|f, item| write!(f, "{}={}", item.0, item.1));
 
@@ -1628,8 +1634,8 @@ mod tests {
         let quorum_set = vec![btreeset! {0, 1, 2}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
 
-        progress.update(&1, 5).ok();
-        progress.update(&2, 3).ok();
+        progress.update_progress(&1, 5).ok();
+        progress.update_progress(&2, 3).ok();
 
         // Collect ids as Vec - order matters after updates (sorted by value descending)
         let ids: Vec<u64> = progress.collect_mapped(|item| item.0);
@@ -1650,10 +1656,10 @@ mod tests {
         let quorum_set = vec![btreeset! {0, 1, 2, 3, 4, 5, 6}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [7], |id| (id, 0));
 
-        progress.update(&0, 12).ok();
-        progress.update(&1, 11).ok();
-        progress.update(&2, 10).ok();
-        progress.update(&3, 9).ok();
+        progress.update_progress(&0, 12).ok();
+        progress.update_progress(&1, 11).ok();
+        progress.update_progress(&2, 10).ok();
+        progress.update_progress(&3, 9).ok();
         assert_eq!(&9, progress.quorum_accepted());
 
         // Node 1 log-reverts: its progress falls back to the default value and the
@@ -1682,11 +1688,11 @@ mod tests {
 
         // Node 4 catches up to exactly 10: without the move-down, the reverted node 1
         // would be counted spuriously and 10 would be accepted with only 3 real grants.
-        assert_eq!(Ok(9), copy_result(progress.update(&4, 10)));
+        assert_eq!(Ok(9), copy_result(progress.update_progress(&4, 10)));
         assert_matches_model(&progress, "after catching up to 10");
 
         // A real quorum at 10: {0, 2, 4, 5}.
-        assert_eq!(Ok(10), copy_result(progress.update(&5, 10)));
+        assert_eq!(Ok(10), copy_result(progress.update_progress(&5, 10)));
         assert_matches_model(&progress, "after a real quorum at 10");
 
         // Resetting a learner or a nonexistent id does not reorder anything.
@@ -1728,7 +1734,7 @@ mod tests {
                         let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
                             + next_random(&mut seed) % 7
                             + 1;
-                        progress.update(&id, value).ok();
+                        progress.update_progress(&id, value).ok();
                     }
 
                     want = want.max(model_quorum_accepted(
@@ -1752,13 +1758,13 @@ mod tests {
         let quorum_set = vec![btreeset! {0, 1, 2, 3, 4}];
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
 
-        progress.update(&0, 5).ok(); // qa = 0
-        progress.update(&1, 3).ok(); // qa = 0
-        progress.update(&2, 4).ok(); // qa = 3 ; above-qa region = [0:5, 2:4] (descending, ok)
-        progress.update(&2, 10).ok(); // voter 2 was already > qa(3) and advances further:
+        progress.update_progress(&0, 5).ok(); // qa = 0
+        progress.update_progress(&1, 3).ok(); // qa = 0
+        progress.update_progress(&2, 4).ok(); // qa = 3 ; above-qa region = [0:5, 2:4] (descending, ok)
+        progress.update_progress(&2, 10).ok(); // voter 2 was already > qa(3) and advances further:
         //   move_up must still run; if it were skipped, the region would become
         //   [0:5, 2:10] (NOT descending) and the next update would falsely accept 6.
-        let qa = progress.update(&3, 6).ok();
+        let qa = progress.update_progress(&3, 6).ok();
 
         // True match values: {0:5, 1:3, 2:10, 3:6, 4:0}; sorted desc = 10,6,5,3,0 -> 3rd-largest =
         // 5. Only voters {2,3} reached 6 -> 2 voters -> NOT a majority.
