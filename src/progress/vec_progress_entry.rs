@@ -8,16 +8,16 @@ pub trait VecProgressEntry {
     /// ID type of the entry.
     type Id: 'static + PartialEq;
 
-    /// Monotonic progress value type.
+    /// Ordered progress value type.
     type Progress: Clone + Default + Ord;
 
     /// Return the ID this entry belongs to.
     fn id(&self) -> &Self::Id;
 
-    /// Return the monotonic progress value used to calculate quorum acceptance.
+    /// Return the progress value used to calculate quorum acceptance.
     fn progress(&self) -> &Self::Progress;
 
-    /// Return the mutable monotonic progress value.
+    /// Return the mutable progress value.
     fn progress_mut(&mut self) -> &mut Self::Progress;
 
     /// Return the ID and progress value as references.

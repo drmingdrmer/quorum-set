@@ -1,22 +1,26 @@
 use std::sync::Arc;
 
-/// A set of quorums is a collection of quorum.
+/// Common interface for every quorum rule supported by this crate.
 ///
 /// A quorum is a collection of nodes that a read or write operation in a distributed system has to
 /// contact. See: <http://web.mit.edu/6.033/2005/wwwdocs/quorum_note.html>
 ///
-/// Implementations must be upward-closed: adding more IDs to a quorum must still be a quorum.
+/// Implementations must be upward-closed: adding IDs to an accepted quorum must keep it accepted.
+/// The crate provides implementations for flat majority sets, joint quorum sets, and hierarchical
+/// [`QuorumTree`](crate::QuorumTree) rules.
 pub trait QuorumSet {
     /// Node ID type in this quorum set.
     type Id: 'static;
 
-    /// Iterator over all IDs in this quorum set.
+    /// Iterator over every voter ID tracked by this quorum set.
+    ///
+    /// Implementations that combine multiple sub-rules return each ID once.
     type Iter: Iterator<Item = Self::Id>;
 
-    /// Check if a series of ID constitute a quorum that is defined by this quorum set.
+    /// Return `true` if the candidate IDs satisfy this quorum rule.
     fn is_quorum<'a, I: Iterator<Item = &'a Self::Id> + Clone>(&self, ids: I) -> bool;
 
-    /// Returns all ids in this QuorumSet
+    /// Return all voter IDs in this quorum set.
     fn ids(&self) -> Self::Iter;
 }
 

@@ -15,27 +15,31 @@ use super::display_vec_progress::DisplayVecProgress;
 use super::progress_stats::ProgressStats;
 use crate::quorum::QuorumSet;
 
-/// Track the progress of several incremental values.
+/// Tracks per-node progress and the greatest value accepted by a quorum.
 ///
-/// When one of the values is updated, it uses a `QuorumSet` to calculate the quorum-accepted
-/// value.
-/// `Entry` stores an ID, a progress value, and application-owned user data.
-/// `QS` is a quorum set implementation.
+/// `Entry` stores a node ID, an ordered progress value, and optional
+/// application-owned data. `QS` decides which node IDs constitute a quorum. In
+/// Raft terms, this is a compact map from node ID to replicated log ID plus any
+/// follower state the application keeps beside it.
 ///
-/// Internally it uses a vector as storage, thus it is suitable for a small quorum set.
+/// Internally this type uses a vector and keeps only the voter prefix above the
+/// current quorum-accepted value sorted. Normal updates may only keep or
+/// increase progress; explicit resets may move an entry backward without
+/// lowering the recorded quorum-accepted value. This makes the type a good fit
+/// for small consensus memberships.
 #[derive(Clone, Debug)]
 pub struct VecProgress<Entry, QS>
 where
     Entry: VecProgressEntry,
     QS: QuorumSet<Id = Entry::Id>,
 {
-    /// Quorum set to determine if a set of `id` constitutes a quorum.
+    /// Quorum set used to decide whether candidate IDs constitute a quorum.
     quorum_set: QS,
 
-    /// The max value that is accepted by a quorum.
+    /// The greatest value accepted by a quorum.
     quorum_accepted: Entry::Progress,
 
-    /// Number of voters
+    /// Number of voter entries.
     voter_count: usize,
 
     /// Progress data.
@@ -43,10 +47,9 @@ where
     /// Elements with values greater than `quorum_accepted` are sorted in descending order.
     /// Others are unsorted.
     ///
-    /// The first `voter_count` elements are voters, the left are learners.
-    /// Learner elements are always still.
-    /// A voter element will be moved up to keep them in descending order when a new value is
-    /// updated.
+    /// The first `voter_count` entries are voters; the rest are learners.
+    /// Learners are not reordered by progress updates.
+    /// Voters may move within the voter range to maintain the sorted prefix.
     entries: Vec<Entry>,
 
     /// Statistics of how it runs.
@@ -79,7 +82,11 @@ where
     Entry::Progress: Debug,
     QS: QuorumSet<Id = Entry::Id>,
 {
-    /// Create a progress tracker from quorum and learner IDs.
+    /// Create a progress tracker from a quorum set and learner IDs.
+    ///
+    /// Voters are created from `quorum_set.ids()`. Learners are tracked after
+    /// voters and never contribute to quorum acceptance. `default_entry` builds
+    /// the initial entry for every voter and learner ID.
     pub fn new(
         quorum_set: QS,
         learner_ids: impl IntoIterator<Item = Entry::Id>,
@@ -155,7 +162,7 @@ where
         &self.stat
     }
 
-    /// Return a display adapter that formats every entry with the provided formatter.
+    /// Return a display adapter that formats entries with a caller-provided formatter.
     pub fn display_with<Fmt>(&self, f: Fmt) -> DisplayVecProgress<'_, Entry, QS, Fmt>
     where Fmt: Fn(&mut Formatter<'_>, &Entry) -> std::fmt::Result {
         DisplayVecProgress { inner: self, f }
@@ -175,21 +182,21 @@ where
     Entry::Progress: Debug,
     QS: QuorumSet<Id = Entry::Id>,
 {
-    /// Update one of the scalar values and re-calculate the quorum-accepted value.
+    /// Update one progress value monotonically and recalculate the quorum-accepted value.
     ///
     /// It returns `None` if the `id` is not found.
     /// Otherwise, it returns the current quorum-accepted value.
-    /// Re-updating with the same V will do nothing.
+    /// Updating with the same value leaves the state unchanged.
     ///
     /// # Algorithm
     ///
-    /// Only when the **previous value** is less than or equal to the quorum-accepted,
-    /// and the **new value** is greater than the quorum-accepted
-    /// there is possibly an update to the quorum-accepted.
+    /// Only one case can increase the quorum-accepted value: the **previous value**
+    /// is less than or equal to the current quorum-accepted value, and the **new
+    /// value** is greater than it.
     ///
-    /// This way it gets rid of a portion of unnecessary re-calculation of quorum-accepted
-    /// and avoids unnecessary sorting: progresses are kept in order, and only values greater than
-    /// quorum-accepted need to sort.
+    /// This avoids many unnecessary quorum recalculations and sorts. Progress
+    /// entries above the quorum-accepted value are kept in descending order, and
+    /// entries at or below it do not need to be sorted.
     ///
     /// E.g., given 3 ids with values `1,3,5`, as shown in the figure below:
     ///
@@ -215,11 +222,11 @@ where
         self.update_entry_with(id, |entry| f(entry.progress_mut()))
     }
 
-    /// Update an entry and re-calculate the quorum-accepted value.
+    /// Update an entry and recalculate the quorum-accepted value.
     ///
-    /// This is for application-owned fields that have to be mutated together
-    /// with the progress value. The progress update must still be monotonic.
-    /// The entry ID must not be changed.
+    /// Use this when application-owned fields must change together with the
+    /// progress value. The progress update must not lower progress, and the
+    /// entry ID must not change.
     ///
     /// It returns `None` if the `id` is not found.
     /// Otherwise, it returns the current quorum-accepted value.
@@ -243,7 +250,7 @@ where
     /// This method only exposes [`VecProgressEntryData::Data`], so it cannot
     /// change progress or invalidate the ordering maintained by [`VecProgress`].
     ///
-    /// It returns the updated data after update if the `id` is found, otherwise returns `None`.
+    /// Returns the updated data when `id` is found, otherwise returns `None`.
     pub fn update_data_with<F>(&mut self, id: &Entry::Id, f: F) -> Option<&Entry::Data>
     where
         Entry: VecProgressEntryData,
@@ -256,12 +263,13 @@ where
         Some(self.entries[index].data())
     }
 
-    /// Update an entry whose progress value may move backward, e.g., when replication progress
-    /// is reset upon log reversion.
+    /// Update an entry whose progress value may move backward, for example when
+    /// replication progress is reset upon log reversion.
     ///
-    /// If the progress value is lowered, the entry is moved down to keep the values greater than
-    /// `quorum_accepted` sorted. The recorded quorum-accepted value is deliberately not
-    /// recalculated: a value accepted by a quorum must never be withdrawn.
+    /// If the progress value is lowered, the entry is moved down to keep the
+    /// values greater than `quorum_accepted` sorted. The recorded
+    /// quorum-accepted value is deliberately not recalculated: a value accepted
+    /// by a quorum must never be withdrawn.
     /// The entry ID must not be changed.
     ///
     /// It returns the updated entry if the `id` is found, otherwise returns `None`.
@@ -317,7 +325,7 @@ where
                 for i in new_index..self.voter_count {
                     let prog = self.entries[i].progress();
 
-                    // No need to re-calculate already quorum-accepted value.
+                    // No need to recalculate an already quorum-accepted value.
                     if prog <= &self.quorum_accepted {
                         break;
                     }
@@ -339,7 +347,10 @@ where
         &self.quorum_accepted
     }
 
-    /// Update one of the scalar values and re-calculate the quorum-accepted value.
+    /// Set one node's progress and recalculate the quorum-accepted value.
+    ///
+    /// The new value must be greater than or equal to the current progress. Use
+    /// [`Self::reset_entry_with()`] for an explicit backward move.
     ///
     /// It returns `None` if the `id` is not found.
     /// Otherwise, it returns the current quorum-accepted value.
@@ -351,7 +362,7 @@ where
         self.update_progress_with(id, |x| *x = value)
     }
 
-    /// Update the value if the new value is greater than the current value.
+    /// Increase one node's progress if `value` is greater than its current value.
     ///
     /// It returns `None` if the `id` is not found.
     /// Otherwise, it returns the current quorum-accepted value.
@@ -367,27 +378,26 @@ where
         })
     }
 
-    /// Get the entry by `id`.
+    /// Return the tracked entry for `id`.
     pub fn get(&self, id: &Entry::Id) -> Option<&Entry> {
         let index = self.index(id)?;
         Some(&self.entries[index])
     }
 
-    /// Get the greatest value that is accepted by the quorum set.
+    /// Return the greatest progress value accepted by the quorum set.
     ///
-    /// In raft or other distributed consensus,
-    /// To commit a value, the value has to be **accepted by a quorum** and has to be the greatest
-    /// value every proposed.
+    /// In Raft, this is the replication progress reached by enough voters to be
+    /// considered committed once the term-specific commit rule also allows it.
     pub fn quorum_accepted(&self) -> &Entry::Progress {
         &self.quorum_accepted
     }
 
-    /// Iterate over all id and values, voters first followed by learners.
+    /// Iterate over all entries, with voters first and learners after them.
     pub fn iter(&self) -> Iter<'_, Entry> {
         self.entries.as_slice().iter()
     }
 
-    /// Map each item to a value and collect into a collection.
+    /// Map every entry and collect the mapped values.
     pub fn collect_mapped<F, T, C>(&self, f: F) -> C
     where
         F: Fn(&Entry) -> T,
@@ -396,7 +406,11 @@ where
         self.iter().map(f).collect()
     }
 
-    /// Build a new instance with the new quorum set, inheriting progress data from `self`.
+    /// Build a tracker for a new quorum set while preserving progress for shared IDs.
+    ///
+    /// Entries whose IDs still exist in the new voter or learner set keep their
+    /// previous progress and application data. New IDs are initialized through
+    /// `default_entry`.
     pub fn upgrade_quorum_set(
         self,
         quorum_set: QS,
@@ -427,7 +441,7 @@ where
         Some(self.update_at(index, prev_progress))
     }
 
-    /// Return if the given id is a voter.
+    /// Return whether the given ID is a voter.
     ///
     /// A voter is a node in the quorum set that can grant a value.
     /// A learner's progress is also tracked, but it will never grant a value.
@@ -1702,7 +1716,7 @@ mod tests {
                     let id = (next_random(&mut seed) >> 32) % 8;
                     let context = format!("case-{case_id} seed-{seed} step-{step} id-{id}");
 
-                    if (next_random(&mut seed) >> 32) % 8 == 0 {
+                    if (next_random(&mut seed) >> 32).is_multiple_of(8) {
                         progress.reset_entry_with(&id, |entry| entry.1 = 0);
                     } else {
                         let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()

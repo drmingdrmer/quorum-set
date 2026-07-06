@@ -2,7 +2,7 @@
 name = "quorum-tree"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 
 authors = [
     "Zhang Yanpo <drdr.xp@gmail.com>",
@@ -18,7 +18,7 @@ readme = "README.md"
 
 [dependencies]
 sha2 = { version = "0.10" }
-validit = { version = "0.2.5", default-features = false }
+validit = { version = "0.2.6", default-features = false }
 
 [dev-dependencies]
 anyhow = { version = "1.0" }

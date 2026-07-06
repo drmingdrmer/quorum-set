@@ -8,9 +8,9 @@ use crate::quorum::coherent::FindCoherent;
 impl<NID> Coherent<NID, Vec<BTreeSet<NID>>> for Vec<BTreeSet<NID>>
 where NID: PartialOrd + Ord + Clone + 'static
 {
-    /// Check if two `joint` are coherent.
+    /// Return `true` when two joint quorum sets share a config.
     ///
-    /// Read more about extended membership change in openraft:
+    /// Read more about extended membership change in OpenRaft:
     /// <https://docs.rs/openraft/latest/openraft/docs/data/extended_membership/index.html>
     fn is_coherent_with(&self, other: &Vec<BTreeSet<NID>>) -> bool {
         for a in self {
@@ -24,7 +24,7 @@ where NID: PartialOrd + Ord + Clone + 'static
     }
 }
 
-/// Impl to build an intermediate quorum set that is coherent with a joint and a uniform quorum set.
+/// Builds an intermediate joint quorum set for a target flat config.
 impl<NID> FindCoherent<NID, BTreeSet<NID>> for Vec<BTreeSet<NID>>
 where NID: PartialOrd + Ord + Clone + 'static
 {

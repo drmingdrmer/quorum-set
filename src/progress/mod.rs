@@ -1,9 +1,16 @@
-//! Progress tracks replication state, i.e., it can be considered a map of node id to already
-//! replicated log id.
+//! Progress tracking over a [`QuorumSet`](crate::QuorumSet).
 //!
-//! The "progress" internally is a vector of scalar values.
-//! The scalar value is monotonically incremental. Decreasing it is not allowed.
-//! Optimization on calculating the quorum-accepted log id is done on this assumption.
+//! [`VecProgress`] stores per-node progress values and keeps the greatest value
+//! accepted by the configured quorum set. In Raft terms, it can be viewed as a
+//! map from node ID to the latest replicated log ID.
+//!
+//! Normal progress updates are monotonic: an entry's progress may stay the same
+//! or increase. `VecProgress` uses that rule to avoid unnecessary quorum
+//! recalculation and sorting. The explicit reset API can move one entry backward
+//! without lowering the recorded quorum-accepted value.
+//!
+//! This module is designed for small consensus memberships where a compact
+//! vector is simpler than indexed storage.
 
 #[cfg(feature = "bench")]
 #[cfg(test)]

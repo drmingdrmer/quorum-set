@@ -4,7 +4,10 @@ use crate::Node;
 use crate::QuorumTree;
 use crate::quorum::quorum_set::QuorumSet;
 
-/// Impl a simple majority quorum set
+/// Majority quorum implementation for a flat voter set.
+///
+/// A candidate set is accepted when it contains more than half of the IDs in
+/// this `BTreeSet`.
 impl<ID> QuorumSet for BTreeSet<ID>
 where ID: PartialOrd + Ord + Clone + 'static
 {
@@ -30,7 +33,10 @@ where ID: PartialOrd + Ord + Clone + 'static
     }
 }
 
-/// Impl a joint quorum set: a node set is a quorum iff it is a majority in every config.
+/// Joint quorum implementation for multiple flat voter sets.
+///
+/// A candidate set is accepted only when it is a majority quorum in every
+/// member config. `ids()` returns the deduplicated union of all config IDs.
 impl<NID> QuorumSet for Vec<BTreeSet<NID>>
 where NID: PartialOrd + Ord + Clone + 'static
 {
@@ -55,7 +61,10 @@ where NID: PartialOrd + Ord + Clone + 'static
     }
 }
 
-/// Impl a hierarchical quorum set.
+/// Hierarchical quorum implementation for [`QuorumTree`].
+///
+/// Evaluation follows the tree structure. `ids()` returns all leaf IDs once,
+/// even when the same node appears in more than one subtree.
 impl<ID> QuorumSet for QuorumTree<ID>
 where ID: Ord + Clone + 'static
 {

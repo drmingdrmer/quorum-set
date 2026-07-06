@@ -1,13 +1,29 @@
 # quorum-tree
 
 `quorum-tree` models hierarchical quorum rules with deterministic canonical IDs.
+It also provides a single quorum-evaluation trait and a progress tracker for
+applying those rules in consensus systems.
 
-The main type is `QuorumTree`. A tree contains child nodes, and each child is
-either a node ID or another `QuorumTree`. The tree is satisfied when at least
-`quorum_size` children are selected.
+The shared abstraction is `QuorumSet`: given candidate node IDs, it answers
+whether those IDs form a quorum and exposes the full voter ID set. The crate
+ships three implementations:
 
-This crate is designed for consensus systems that need separate read and write
-quorum rules. A complete quorum configuration should use two trees:
+- `BTreeSet<ID>`: a flat majority quorum.
+- `Vec<BTreeSet<ID>>`: a joint quorum, accepted only when every member config accepts.
+- `QuorumTree<ID>`: a hierarchical quorum built from nested `Node` values.
+
+`VecProgress` is the main consumer. It tracks per-node progress and maintains
+the greatest progress value accepted by the configured `QuorumSet`. `Coherent`
+models the intersection relation used by membership changes.
+
+`QuorumTree` is the structural implementation. A tree contains child nodes, and
+each child is either a node ID or another `QuorumTree`. The tree is satisfied
+when at least `quorum_size` children are selected.
+
+## Read and Write Rules
+
+This crate is designed for consensus systems that may need separate read and
+write quorum rules. A complete quorum configuration can use two trees:
 
 - one `QuorumTree` for read quorums
 - one `QuorumTree` for write quorums
@@ -23,15 +39,54 @@ tree, `quorum_size` does not always need to be a majority of the tree's nodes. A
 read tree can require fewer than half of the nodes if the write tree is defined
 so every write quorum still intersects every possible read quorum.
 
-This crate checks whether a set of node IDs satisfies one tree. It does not
-prove that a read tree and a write tree have the required cross-intersection
+This crate evaluates the quorum rules it is given. It does not prove that
+arbitrary read and write quorum designs have the required cross-intersection
 property. The caller is responsible for building compatible read and write
-trees.
+rules.
 
-Construction rejects invalid rules: `QuorumTree::new` returns an error on a
-duplicate child node or on a `quorum_size` larger than the number of children.
+Construction rejects invalid tree rules: `QuorumTree::new` returns an error on
+a duplicate child node or on a `quorum_size` larger than the number of children.
 
-## Usage
+## Quorum Sets
+
+```rust
+use std::collections::BTreeSet;
+
+use quorum_tree::QuorumSet;
+
+let majority = BTreeSet::from([1, 2, 3]);
+assert!(majority.is_quorum([1, 2].iter()));
+assert!(!majority.is_quorum([1].iter()));
+
+let joint = vec![
+    BTreeSet::from([1, 2, 3]),
+    BTreeSet::from([3, 4, 5]),
+];
+assert!(joint.is_quorum([1, 3, 4].iter()));
+assert!(!joint.is_quorum([1, 2].iter()));
+```
+
+The simpler flat setup is to use a majority quorum for both reads and writes.
+For a flat `QuorumTree`, setting `quorum_size` to at least `nodes.len() / 2 + 1`
+gives the usual majority quorum rule.
+
+```rust
+use quorum_tree::{Node, QuorumSet, QuorumTree};
+
+let read_quorum = QuorumTree::new(2, [
+    Node::Id(1),
+    Node::Id(2),
+    Node::Id(3),
+]).unwrap();
+
+let write_quorum = read_quorum.clone();
+
+assert!(read_quorum.is_quorum([1, 2].iter()));
+assert!(write_quorum.is_quorum([2, 3].iter()));
+```
+
+A non-majority read rule can still be valid if the write rule is strong enough
+to intersect every read quorum:
 
 ```rust
 use quorum_tree::{Node, QuorumSet, QuorumTree};
@@ -57,26 +112,6 @@ In this example, a read quorum can be a single node, and the only write quorum
 contains all nodes. Therefore every read quorum intersects with every write
 quorum, even though read quorums do not intersect with each other.
 
-The simpler setup is to use the same majority tree for reads and writes:
-
-```rust
-use quorum_tree::{Node, QuorumSet, QuorumTree};
-
-let read_quorum = QuorumTree::new(2, [
-    Node::Id(1),
-    Node::Id(2),
-    Node::Id(3),
-]).unwrap();
-
-let write_quorum = read_quorum.clone();
-
-assert!(read_quorum.is_quorum([1, 2].iter()));
-assert!(write_quorum.is_quorum([2, 3].iter()));
-```
-
-For a flat tree, setting `quorum_size` to at least `nodes.len() / 2 + 1` gives
-the usual majority quorum rule.
-
 ## Hierarchical Quorums
 
 Nested trees model grouped layouts. This example selects a write quorum only
@@ -101,6 +136,42 @@ let write_quorum = QuorumTree::new(2, [
 assert!(write_quorum.is_quorum([1, 2, 4, 5].iter()));
 assert!(!write_quorum.is_quorum([1, 2, 4].iter()));
 ```
+
+`QuorumTree::ids()` returns each leaf ID once. A node may appear in more than
+one subtree, but it is still one voter ID for APIs such as `VecProgress`.
+
+## Progress Tracking
+
+`VecProgress` works with any `QuorumSet`. It stores voter IDs from `ids()` first,
+then learners, and updates the quorum-accepted value as node progress advances.
+
+```rust
+use std::collections::BTreeSet;
+
+use quorum_tree::{IdVal, VecProgress};
+
+let voters = BTreeSet::from([1, 2, 3]);
+let mut progress = VecProgress::<IdVal<u64, u64>, _>::new(
+    voters,
+    [],
+    IdVal::new_default,
+);
+
+assert_eq!(Some(&0), progress.update_progress(&1, 5));
+assert_eq!(Some(&5), progress.update_progress(&2, 5));
+assert_eq!(&5, progress.quorum_accepted());
+```
+
+## Coherence
+
+Consensus membership changes need every quorum in one membership to intersect
+every quorum in the next. `Coherent` checks that relation for joint
+configurations, and `FindCoherent` builds the intermediate joint config used
+when moving between memberships.
+
+This crate checks quorum satisfaction and coherence for the supported quorum-set
+forms. It does not prove that arbitrary read and write quorum designs are
+compatible; callers still choose the read/write rules their protocol requires.
 
 ## Canonical IDs
 

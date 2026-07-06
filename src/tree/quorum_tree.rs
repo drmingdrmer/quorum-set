@@ -50,7 +50,7 @@ where ID: Ord
     /// # Errors
     ///
     /// - [`QuorumTreeError::DuplicateChild`]: a child was given more than once. A duplicate child
-    ///   is always an upstream bug; a quorum rule never contains the same member twice.
+    ///   is always an upstream bug; a tree never contains the same child twice.
     /// - [`QuorumTreeError::UnsatisfiableQuorum`]: `quorum_size` exceeds the number of child nodes,
     ///   so no input could satisfy the tree.
     ///
