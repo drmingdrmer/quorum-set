@@ -3,10 +3,10 @@ use std::fmt;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use super::quorum_tree_spec::QuorumTreeSpec;
 use crate::CanonicalId;
 use crate::Node;
 use crate::QuorumTreeError;
-use crate::quorum_tree_spec::QuorumTreeSpec;
 
 mod impl_display;
 

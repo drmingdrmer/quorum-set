@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
+use super::canonical_id::CanonicalId;
 use crate::Node;
 use crate::QuorumTreeError;
-use crate::canonical_id::CanonicalId;
 
 mod impl_canonical_id;
 mod impl_display;

@@ -3,10 +3,10 @@ use std::fmt;
 use sha2::Digest;
 use sha2::Sha256;
 
+use super::canonical_id::CanonicalId;
+use super::canonical_id::MAX_CANONICAL_ID_LEN;
+use super::canonical_id::fmt_escaped;
 use crate::QuorumTree;
-use crate::canonical_id::CanonicalId;
-use crate::canonical_id::MAX_CANONICAL_ID_LEN;
-use crate::canonical_id::fmt_escaped;
 
 /// A child of a [`QuorumTree`](crate::QuorumTree).
 ///

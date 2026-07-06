@@ -5,8 +5,8 @@ use sha2::Digest;
 use sha2::Sha256;
 
 use super::QuorumTreeSpec;
-use crate::canonical_id::CanonicalId;
-use crate::canonical_id::MAX_CANONICAL_ID_LEN;
+use crate::CanonicalId;
+use crate::tree::canonical_id::MAX_CANONICAL_ID_LEN;
 
 impl<ID> CanonicalId for QuorumTreeSpec<ID>
 where ID: Ord + CanonicalId
@@ -46,7 +46,7 @@ mod tests {
     use crate::CanonicalId;
     use crate::Node;
     use crate::QuorumTree;
-    use crate::canonical_id::MAX_CANONICAL_ID_LEN;
+    use crate::tree::canonical_id::MAX_CANONICAL_ID_LEN;
 
     fn id(i: u64) -> Node<u64> {
         Node::Id(i)
