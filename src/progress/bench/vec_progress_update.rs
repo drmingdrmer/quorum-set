@@ -18,7 +18,7 @@ fn progress_update_progress_01234_567(b: &mut Bencher) {
         values[id as usize] += 1;
         let v = values[id as usize];
 
-        progress.update_progress(&black_box(id), black_box(v)).ok();
+        progress.update_progress(&black_box(id), black_box(v));
     });
 
     // It shows that is_quorum() is called at a rate of about 1/4 of update_progress()
