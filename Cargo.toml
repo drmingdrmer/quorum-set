@@ -1,5 +1,5 @@
 [package]
-name = "quorum-tree"
+name = "quorum-set"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
@@ -9,11 +9,11 @@ authors = [
 ]
 categories = ["algorithms", "data-structures"]
 description = "Hierarchical quorum trees with deterministic canonical IDs"
-documentation = "https://docs.rs/quorum-tree"
-homepage = "https://github.com/drmingdrmer/quorum-tree"
+documentation = "https://docs.rs/quorum-set"
+homepage = "https://github.com/drmingdrmer/quorum-set"
 keywords = ["quorum", "raft", "consensus"]
 license = "Apache-2.0"
-repository = "https://github.com/drmingdrmer/quorum-tree"
+repository = "https://github.com/drmingdrmer/quorum-set"
 readme = "README.md"
 
 [dependencies]

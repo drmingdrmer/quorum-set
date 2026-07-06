@@ -57,7 +57,7 @@ where ID: Ord
     /// # Examples
     ///
     /// ```
-    /// use quorum_tree::{Node, QuorumSet, QuorumTree, QuorumTreeError};
+    /// use quorum_set::{Node, QuorumSet, QuorumTree, QuorumTreeError};
     ///
     /// let tree = QuorumTree::new(2, [
     ///     Node::Id(1),

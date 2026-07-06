@@ -1,6 +1,6 @@
-# quorum-tree
+# quorum-set
 
-`quorum-tree` models hierarchical quorum rules with deterministic canonical IDs.
+`quorum-set` models hierarchical quorum rules with deterministic canonical IDs.
 It also provides a single quorum-evaluation trait and a progress tracker for
 applying those rules in consensus systems.
 
@@ -52,7 +52,7 @@ a duplicate child node or on a `quorum_size` larger than the number of children.
 ```rust
 use std::collections::BTreeSet;
 
-use quorum_tree::QuorumSet;
+use quorum_set::QuorumSet;
 
 let majority = BTreeSet::from([1, 2, 3]);
 assert!(majority.is_quorum([1, 2].iter()));
@@ -71,7 +71,7 @@ For a flat `QuorumTree`, setting `quorum_size` to at least `nodes.len() / 2 + 1`
 gives the usual majority quorum rule.
 
 ```rust
-use quorum_tree::{Node, QuorumSet, QuorumTree};
+use quorum_set::{Node, QuorumSet, QuorumTree};
 
 let read_quorum = QuorumTree::new(2, [
     Node::Id(1),
@@ -89,7 +89,7 @@ A non-majority read rule can still be valid if the write rule is strong enough
 to intersect every read quorum:
 
 ```rust
-use quorum_tree::{Node, QuorumSet, QuorumTree};
+use quorum_set::{Node, QuorumSet, QuorumTree};
 
 let read_quorum = QuorumTree::new(1, [
     Node::Id(1),
@@ -118,7 +118,7 @@ Nested trees model grouped layouts. This example selects a write quorum only
 when both groups have a local majority:
 
 ```rust
-use quorum_tree::{Node, QuorumSet, QuorumTree};
+use quorum_set::{Node, QuorumSet, QuorumTree};
 
 fn id(i: u64) -> Node<u64> {
     Node::Id(i)
@@ -148,7 +148,7 @@ then learners, and updates the quorum-accepted value as node progress advances.
 ```rust
 use std::collections::BTreeSet;
 
-use quorum_tree::{IdVal, VecProgress};
+use quorum_set::{IdVal, VecProgress};
 
 let voters = BTreeSet::from([1, 2, 3]);
 let mut progress = VecProgress::<IdVal<u64, u64>, _>::new(
