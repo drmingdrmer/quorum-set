@@ -1,3 +1,6 @@
+use std::collections::BTreeSet;
+use std::sync::Arc;
+
 use maplit::btreeset;
 
 use crate::Node;
@@ -76,6 +79,16 @@ fn test_joint_quorum_set_dedupes_candidate_ids() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_empty_joint_quorum_set() -> anyhow::Result<()> {
+    let qs: Vec<BTreeSet<u64>> = vec![];
+
+    assert!(qs.is_quorum([1].iter()));
+    assert_eq!(btreeset! {}, qs.ids().collect());
+
+    Ok(())
+}
+
+#[test]
 fn test_ids() -> anyhow::Result<()> {
     {
         let m12345 = btreeset! {1,2,3,4,5};
@@ -86,6 +99,17 @@ fn test_ids() -> anyhow::Result<()> {
         let qs = vec![btreeset! {1,2,3,4,5}, btreeset! {4,5,6,7,8}];
         assert_eq!(btreeset! {1,2,3,4,5,6,7,8}, qs.ids().collect());
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_arc_quorum_set_impl() -> anyhow::Result<()> {
+    let qset = Arc::new(btreeset! {1,2,3});
+
+    assert_eq!(btreeset! {1,2,3}, qset.ids().collect());
+    assert!(!qset.is_quorum([1].iter()));
+    assert!(qset.is_quorum([1, 2].iter()));
 
     Ok(())
 }
@@ -103,6 +127,16 @@ fn test_quorum_tree_impl() -> anyhow::Result<()> {
     assert!(qset.is_quorum([1, 3, 5].iter()));
     assert!(qset.is_quorum([1, 2, 3, 4].iter()));
     assert!(qset.is_quorum([1, 3, 4, 5].iter()));
+
+    Ok(())
+}
+
+#[test]
+fn test_quorum_tree_ids_dedupe_direct_and_nested_ids() -> anyhow::Result<()> {
+    let subtree = QuorumTree::new(2, [id(1), id(2), id(3)])?;
+    let qset = QuorumTree::new(1, [Node::Id(1), Node::Subtree(subtree)])?;
+
+    assert_eq!(btreeset! {1,2,3}, qset.ids().collect());
 
     Ok(())
 }

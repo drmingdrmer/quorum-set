@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use maplit::btreeset;
 
 use crate::quorum::coherent::Coherent;
@@ -54,6 +56,16 @@ fn test_find_coherent() -> anyhow::Result<()> {
     assert_eq!(j1, j12.find_coherent(s1()));
     assert_eq!(j2, j12.find_coherent(s2()));
     assert_eq!(j23, j12.find_coherent(s3()));
+
+    Ok(())
+}
+
+#[test]
+fn test_find_coherent_from_empty_joint_config() -> anyhow::Result<()> {
+    let joint: Vec<BTreeSet<u64>> = vec![];
+    let other = btreeset! {1,2,3};
+
+    assert_eq!(vec![other.clone()], joint.find_coherent(other));
 
     Ok(())
 }

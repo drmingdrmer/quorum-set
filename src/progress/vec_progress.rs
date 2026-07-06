@@ -464,6 +464,8 @@ mod tests {
     use maplit::btreeset;
 
     use super::VecProgress;
+    use crate::Node;
+    use crate::QuorumTree;
     use crate::progress::VecProgressEntry;
     use crate::progress::VecProgressEntryData;
     use crate::quorum::QuorumSet;
@@ -671,6 +673,26 @@ mod tests {
             progress.entries
         );
         assert_eq!(5, progress.voter_count);
+    }
+
+    #[test]
+    fn vec_progress_new_with_quorum_tree() {
+        let group_a = QuorumTree::new(2, [Node::Id(1), Node::Id(2), Node::Id(3)]).unwrap();
+        let group_b = QuorumTree::new(2, [Node::Id(4), Node::Id(5), Node::Id(6)]).unwrap();
+        let quorum_set =
+            QuorumTree::new(2, [Node::Subtree(group_a), Node::Subtree(group_b)]).unwrap();
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
+
+        assert_eq!(
+            vec![(1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)],
+            progress.entries
+        );
+        assert_eq!(6, progress.voter_count);
+
+        assert_eq!(Ok(&0), progress.update(&1, 10));
+        assert_eq!(Ok(&0), progress.update(&2, 10));
+        assert_eq!(Ok(&0), progress.update(&4, 10));
+        assert_eq!(Ok(&10), progress.update(&5, 10));
     }
 
     #[test]
