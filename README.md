@@ -40,10 +40,11 @@ tree, `quorum_size` does not always need to be a majority of the tree's nodes. A
 read tree can require fewer than half of the nodes if the write tree is defined
 so every write quorum still intersects every possible read quorum.
 
-This crate evaluates the quorum rules it is given. It does not prove that
-arbitrary read and write quorum designs have the required cross-intersection
-property. The caller is responsible for building compatible read and write
-rules.
+The caller chooses the read and write rules; `verify_intersection` proves or
+refutes the cross-intersection property for the chosen pair. The check is
+exact for any two `QuorumSet` values but exponential in the number of distinct
+voter IDs, so it is intended for validating small configurations and for
+tests.
 
 Construction rejects invalid tree rules: `QuorumTree::new` returns an error on
 a duplicate child node or on a `quorum_size` larger than the number of children.
@@ -90,7 +91,7 @@ A non-majority read rule can still be valid if the write rule is strong enough
 to intersect every read quorum:
 
 ```rust
-use quorum_set::{Node, QuorumSet, QuorumTree};
+use quorum_set::{Node, QuorumSet, QuorumTree, verify_intersection};
 
 let read_quorum = QuorumTree::new(1, [
     Node::Id(1),
@@ -107,6 +108,17 @@ let write_quorum = QuorumTree::new(3, [
 assert!(read_quorum.is_quorum([1].iter()));
 assert!(!write_quorum.is_quorum([1, 2].iter()));
 assert!(write_quorum.is_quorum([1, 2, 3].iter()));
+
+// Every read quorum intersects every write quorum.
+assert!(verify_intersection(&read_quorum, &write_quorum));
+
+// A 2-of-3 write rule is not enough: read quorum {1} misses write quorum {2, 3}.
+let weak_write = QuorumTree::new(2, [
+    Node::Id(1),
+    Node::Id(2),
+    Node::Id(3),
+]).unwrap();
+assert!(!verify_intersection(&read_quorum, &weak_write));
 ```
 
 In this example, a read quorum can be a single node, and the only write quorum
@@ -170,10 +182,11 @@ every quorum in the next. `QuorumIntersection` checks that relation for joint
 configurations, and `QuorumBridge` builds the intermediate joint config used
 when moving between memberships.
 
-This crate checks quorum satisfaction and quorum intersection for the supported
-quorum-set forms. It does not prove that arbitrary read and write quorum
-designs are compatible; callers still choose the read/write rules their
-protocol requires.
+`intersects_with` may be conservative: `true` guarantees the relation, while
+`false` can mean the implementation cannot prove it, in which case moving
+through a joint bridge is the safe path. `verify_intersection` computes the
+exact relation for any two quorum sets, including a read tree against a write
+tree.
 
 ## Canonical IDs
 

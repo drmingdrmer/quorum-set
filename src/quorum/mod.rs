@@ -19,4 +19,5 @@ mod quorum_set_test;
 
 pub use quorum_intersection::QuorumBridge;
 pub use quorum_intersection::QuorumIntersection;
+pub use quorum_intersection::verify_intersection;
 pub use quorum_set::QuorumSet;

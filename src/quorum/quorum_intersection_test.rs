@@ -2,8 +2,11 @@ use std::collections::BTreeSet;
 
 use maplit::btreeset;
 
+use crate::Node;
+use crate::QuorumTree;
 use crate::quorum::QuorumBridge;
 use crate::quorum::QuorumIntersection;
+use crate::quorum::verify_intersection;
 
 #[test]
 fn test_intersects_with() -> anyhow::Result<()> {
@@ -51,6 +54,84 @@ fn test_intersects_with_empty_joint() -> anyhow::Result<()> {
     assert!(!empty.intersects_with(&j123));
     assert!(!j123.intersects_with(&empty));
     assert!(!empty.intersects_with(&empty));
+
+    Ok(())
+}
+
+#[test]
+fn test_verify_intersection() {
+    let s123 = btreeset! {1, 2, 3};
+    let s12 = btreeset! {1, 2};
+    let s45 = btreeset! {4, 5};
+
+    // Majorities of one voter set always intersect each other.
+    assert!(verify_intersection(&s123, &s123));
+    // The only majority of {1,2} is {1,2}, which intersects every majority of {1,2,3}.
+    assert!(verify_intersection(&s12, &s123));
+    assert!(verify_intersection(&s123, &s12));
+    // Majorities of disjoint voter sets never intersect.
+    assert!(!verify_intersection(&s123, &s45));
+}
+
+#[test]
+fn test_verify_intersection_empty_joint() {
+    let empty: Vec<BTreeSet<u64>> = vec![];
+    let j123 = vec![btreeset! {1, 2, 3}];
+
+    // An empty joint accepts the empty set as a quorum, and the empty set
+    // intersects nothing.
+    assert!(!verify_intersection(&empty, &j123));
+    assert!(!verify_intersection(&empty, &empty));
+}
+
+#[test]
+fn test_verify_intersection_exact_where_intersects_with_is_conservative() {
+    let j123 = vec![btreeset! {1, 2, 3}];
+    let j12 = vec![btreeset! {1, 2}];
+
+    // Every majority of {1,2} intersects every majority of {1,2,3}, but the
+    // shared-config heuristic cannot prove it: its `false` means "unknown".
+    assert!(verify_intersection(&j123, &j12));
+    assert!(!j123.intersects_with(&j12));
+}
+
+#[test]
+fn test_intersects_with_true_implies_verified() {
+    let joints: Vec<Vec<BTreeSet<u64>>> = vec![
+        vec![],
+        vec![btreeset! {1, 2, 3}],
+        vec![btreeset! {3, 4, 5}],
+        vec![btreeset! {1, 2, 3}, btreeset! {3, 4, 5}],
+        vec![btreeset! {3, 4, 5}, btreeset! {7, 8, 9}],
+    ];
+
+    // The `intersects_with` error is one-sided: `true` implies the exact relation.
+    for a in &joints {
+        for b in &joints {
+            if a.intersects_with(b) {
+                assert!(verify_intersection(a, b), "a: {a:?}, b: {b:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn test_verify_intersection_tree_read_write() -> anyhow::Result<()> {
+    // Write quorums: majorities of {1,2,3}.
+    let write = btreeset! {1u64, 2, 3};
+
+    // Read quorums: {2,3} or {8,9}. Every write quorum intersects *some* read
+    // quorum, but a read via {8,9} misses every write quorum, so the
+    // universal relation does not hold.
+    let read = QuorumTree::new(1, [
+        Node::Subtree(QuorumTree::new(2, [Node::Id(2), Node::Id(3)])?),
+        Node::Subtree(QuorumTree::new(2, [Node::Id(8), Node::Id(9)])?),
+    ])?;
+    assert!(!verify_intersection(&read, &write));
+
+    // Dropping the {8,9} branch restores intersection.
+    let read = QuorumTree::new(2, [Node::Id(2), Node::Id(3)])?;
+    assert!(verify_intersection(&read, &write));
 
     Ok(())
 }

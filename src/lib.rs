@@ -11,6 +11,7 @@ pub use progress::VecProgressEntryData;
 pub use quorum::QuorumBridge;
 pub use quorum::QuorumIntersection;
 pub use quorum::QuorumSet;
+pub use quorum::verify_intersection;
 pub use tree::CanonicalId;
 pub use tree::Node;
 pub use tree::QuorumTree;
