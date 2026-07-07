@@ -124,6 +124,15 @@ mod tests {
     }
 
     #[test]
+    fn test_canonical_id_escapes_non_ascii_id() {
+        // `_` passes through unescaped; a multi-byte UTF-8 char is escaped
+        // byte by byte.
+        let qset = QuorumTreeSpec::new(1, [str_id("a_中")]).unwrap();
+
+        assert_eq!("1/(Id=a_%E4%B8%AD)", qset.canonical_id());
+    }
+
+    #[test]
     fn test_canonical_id_separates_nodes() {
         let qset1 = QuorumTreeSpec::new(1, [str_id("ab"), str_id("c")]).unwrap();
         let qset2 = QuorumTreeSpec::new(1, [str_id("a"), str_id("bc")]).unwrap();

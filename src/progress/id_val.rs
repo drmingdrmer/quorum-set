@@ -58,3 +58,37 @@ where
         &mut self.val
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::IdVal;
+    use crate::progress::VecProgressEntry;
+
+    #[test]
+    fn test_new_and_new_default() {
+        assert_eq!(
+            IdVal {
+                id: 3u64,
+                val: 7u64
+            },
+            IdVal::new(3, 7)
+        );
+        assert_eq!(IdVal::new(2u64, 0u64), IdVal::new_default(2));
+    }
+
+    #[test]
+    fn test_display() {
+        assert_eq!("3: 7", IdVal::new(3u64, 7u64).to_string());
+    }
+
+    #[test]
+    fn test_vec_progress_entry_accessors() {
+        let mut id_val = IdVal::new(3u64, 7u64);
+
+        assert_eq!(&3, id_val.id());
+        assert_eq!(&7, id_val.progress());
+
+        *id_val.progress_mut() = 9;
+        assert_eq!(IdVal::new(3, 9), id_val);
+    }
+}

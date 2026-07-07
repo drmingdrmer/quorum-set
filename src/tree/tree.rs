@@ -159,6 +159,7 @@ where ID: Ord + CanonicalId
 
 #[cfg(test)]
 mod tests {
+    use std::cmp::Ordering;
     use std::collections::HashSet;
 
     use crate::Node;
@@ -196,6 +197,28 @@ mod tests {
         let tree = QuorumTree::new(2, [id(3), id(1), id(2)]).unwrap();
 
         assert_eq!("2/(Id=1,Id=2,Id=3)", tree.canonical_id());
+    }
+
+    #[test]
+    fn test_quorum_size_accessor() {
+        let tree = QuorumTree::new(2, [id(1), id(2), id(3)]).unwrap();
+
+        assert_eq!(2, tree.quorum_size());
+    }
+
+    #[test]
+    fn test_ord_is_consistent_with_canonical_id() {
+        let a = QuorumTree::new(1, [id(1), id(2)]).unwrap();
+        let b = QuorumTree::new(2, [id(1), id(2)]).unwrap();
+
+        assert_eq!(Ordering::Less, a.cmp(&b));
+        assert_eq!(Some(Ordering::Less), a.partial_cmp(&b));
+        assert_eq!(
+            a.canonical_id().cmp(b.canonical_id()),
+            a.cmp(&b),
+            "ordering follows the canonical ID"
+        );
+        assert_eq!(Ordering::Equal, a.cmp(&a.clone()));
     }
 
     #[test]

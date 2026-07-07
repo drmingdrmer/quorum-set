@@ -66,3 +66,21 @@ where
         &mut self.1
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::VecProgressEntry;
+
+    #[test]
+    fn test_tuple_entry() {
+        let mut entry = (3u64, 7u64);
+
+        assert_eq!(&3, entry.id());
+        assert_eq!(&7, entry.progress());
+        assert_eq!((&3, &7), entry.id_progress());
+        assert_eq!((3, 7), entry.id_progress_owned());
+
+        *entry.progress_mut() = 9;
+        assert_eq!((3, 9), entry);
+    }
+}

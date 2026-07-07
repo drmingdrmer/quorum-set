@@ -651,6 +651,7 @@ mod tests {
     use super::VecProgress;
     use crate::Node;
     use crate::QuorumTree;
+    use crate::progress::IdVal;
     use crate::progress::VecProgressEntry;
     use crate::progress::VecProgressEntryData;
     use crate::quorum::QuorumSet;
@@ -1752,7 +1753,12 @@ mod tests {
                     let context = format!("case-{case_id} seed-{seed} step-{step} id-{id}");
 
                     if (next_random(&mut seed) >> 32).is_multiple_of(8) {
-                        progress.reset_entry_with(&id, |entry| entry.1 = 0);
+                        // Reset to any value not above the current progress:
+                        // both a full drop and a partial lowering that keeps
+                        // the entry above the quorum-accepted value.
+                        let current = progress.get(&id).map(|entry| entry.1).unwrap_or_default();
+                        let value = next_random(&mut seed) % (current + 1);
+                        progress.reset_entry_with(&id, |entry| entry.1 = value);
                     } else {
                         let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
                             + next_random(&mut seed) % 7
@@ -1793,5 +1799,244 @@ mod tests {
         // 5. Only voters {2,3} reached 6 -> 2 voters -> NOT a majority.
         // Expected quorum_accepted = 5.
         assert_eq!(Some(&5), qa);
+    }
+
+    #[test]
+    fn vec_progress_display_entries() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress =
+            VecProgress::<IdVal<u64, u64>, _>::new(quorum_set, [3], IdVal::new_default);
+
+        progress.update_progress(&1, 5);
+        progress.update_progress(&2, 3);
+
+        assert_eq!("{1: 5, 2: 3, 0: 0, 3: 0}", progress.to_string());
+    }
+
+    #[test]
+    fn vec_progress_into_iter() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
+
+        progress.update_progress(&1, 5);
+        progress.update_progress(&2, 3);
+
+        assert_eq!(
+            vec![(1, 5), (2, 3), (0, 0), (3, 0)],
+            progress.into_iter().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn vec_progress_update_entry_with() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress =
+            VecProgress::<IdValData<u64, u64, &'static str>, _>::new(quorum_set, [3], |id| {
+                IdValData::new(id, 0, "init")
+            });
+
+        // Progress and application data change together in one call, and the
+        // quorum-accepted value is recalculated.
+        let got = copy_option(progress.update_entry_with(&1, |entry| {
+            entry.val = 5;
+            entry.data = "replicated";
+        }));
+        assert_eq!(Some(0), got);
+
+        let got = copy_option(progress.update_entry_with(&2, |entry| {
+            entry.val = 3;
+            entry.data = "replicated";
+        }));
+        assert_eq!(Some(3), got);
+
+        assert_eq!(
+            vec![
+                IdValData::new(1, 5, "replicated"),
+                IdValData::new(2, 3, "replicated"),
+                IdValData::new(0, 0, "init"),
+                IdValData::new(3, 0, "init"),
+            ],
+            progress.iter().cloned().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            None,
+            copy_option(progress.update_entry_with(&9, |entry| entry.val = 1))
+        );
+    }
+
+    #[test]
+    fn vec_progress_zero_voters() {
+        let quorum_set: Vec<BTreeSet<u64>> = vec![];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [1, 2], |id| (id, 0));
+
+        assert_eq!(0, progress.voter_count);
+        assert_eq!(vec![(1, 0), (2, 0)], progress.entries);
+        assert_eq!(Some(false), progress.is_voter(&1));
+
+        // An empty joint accepts every candidate set, but there is no voter
+        // progress to accept: quorum-accepted stays at the default value.
+        assert_eq!(Some(&0), progress.update_progress(&1, 5));
+        assert_eq!(&0, progress.quorum_accepted());
+        assert_matches_model(&progress, "zero voters");
+    }
+
+    #[test]
+    fn vec_progress_reset_entry_with_partial_lowering() {
+        let quorum_set = vec![btreeset! {0, 1, 2, 3, 4}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
+
+        progress.update_progress(&0, 20);
+        progress.update_progress(&1, 15);
+        progress.update_progress(&2, 10);
+        assert_eq!(&10, progress.quorum_accepted());
+
+        // Lower node 0 from 20 to 12: it stays above quorum-accepted and must
+        // be moved down past node 1 to keep the above-quorum prefix
+        // descending.
+        let entry = progress.reset_entry_with(&0, |entry| entry.1 = 12);
+        assert_eq!(Some(&(0, 12)), entry);
+        assert_eq!(&10, progress.quorum_accepted());
+        assert_eq!(
+            vec![(1, 15), (0, 12), (2, 10), (3, 0), (4, 0)],
+            progress.entries
+        );
+        assert_matches_model(&progress, "after partial lowering");
+
+        // The next update relies on that ordering: voters {1, 0, 3} reach 12.
+        assert_eq!(Some(12), copy_option(progress.update_progress(&3, 12)));
+        assert_matches_model(&progress, "after catching up to 12");
+    }
+
+    #[test]
+    fn vec_progress_matches_reference_model_with_tree_quorum_set() {
+        let group = |ids: [u64; 3]| {
+            Node::Subtree(QuorumTree::new(2, ids.into_iter().map(Node::Id)).unwrap())
+        };
+
+        for seed in 0..16 {
+            let mut seed = seed + 7;
+            let quorum_set = QuorumTree::new(2, [group([0, 1, 2]), group([3, 4, 5])]).unwrap();
+            let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [6, 7], |id| (id, 0));
+
+            // The quorum-accepted value never moves backward, so the reference
+            // is the running max of the instantaneous model value.
+            let mut want = 0;
+
+            for step in 0..128 {
+                let id = (next_random(&mut seed) >> 32) % 8;
+                let context = format!("seed-{seed} step-{step} id-{id}");
+
+                if (next_random(&mut seed) >> 32).is_multiple_of(8) {
+                    let current = progress.get(&id).map(|entry| entry.1).unwrap_or_default();
+                    let value = next_random(&mut seed) % (current + 1);
+                    progress.reset_entry_with(&id, |entry| entry.1 = value);
+                } else {
+                    let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
+                        + next_random(&mut seed) % 7
+                        + 1;
+                    progress.update_progress(&id, value);
+                }
+
+                want = want.max(model_quorum_accepted(
+                    &progress.quorum_set,
+                    &progress.entries,
+                ));
+                assert_eq!(
+                    &want,
+                    progress.quorum_accepted(),
+                    "{context}: entries: {:?}",
+                    progress.entries
+                );
+                assert_voter_prefix_is_sorted(&progress, &context);
+            }
+        }
+    }
+
+    #[test]
+    fn vec_progress_upgrade_tree_quorum_set() {
+        let group = |ids: [u64; 3]| {
+            Node::Subtree(QuorumTree::new(2, ids.into_iter().map(Node::Id)).unwrap())
+        };
+        let tree_a = QuorumTree::new(2, [group([0, 1, 2]), group([3, 4, 5])]).unwrap();
+        let tree_b = QuorumTree::new(2, [group([3, 4, 5]), group([6, 7, 8])]).unwrap();
+
+        let mut progress = VecProgress::<(u64, u64), _>::new(tree_a, [9], |id| (id, 0));
+
+        for (id, value) in [(0, 9), (1, 8), (3, 7), (4, 6), (9, 5)] {
+            progress.update_progress(&id, value);
+        }
+        assert_eq!(&6, progress.quorum_accepted());
+
+        let upgraded = progress.upgrade_quorum_set(tree_b, [0, 9], |id| (id, 0));
+
+        // Shared IDs keep progress; the new group {6,7,8} starts at 0, so no
+        // quorum has accepted any value above the default yet.
+        assert_eq!(&0, upgraded.quorum_accepted());
+        assert_eq!(Some(&(0, 9)), upgraded.get(&0), "voter becomes learner");
+        assert_eq!(Some(&(9, 5)), upgraded.get(&9), "learner progress is kept");
+        assert_eq!(Some(&(3, 7)), upgraded.get(&3), "voter progress is kept");
+        assert_matches_model(&upgraded, "after tree quorum upgrade");
+    }
+
+    #[test]
+    fn vec_progress_upgrade_quorum_set_preserves_stat() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
+
+        progress.update_progress(&0, 5);
+        progress.update_progress(&1, 3);
+
+        let stat = progress.stat().clone();
+        assert_eq!(
+            (2, 2, 2),
+            (stat.update_count, stat.move_count, stat.is_quorum_count)
+        );
+
+        let upgraded = progress.upgrade_quorum_set(vec![btreeset! {1, 2, 3}], [0], |id| (id, 0));
+
+        assert_eq!(&stat, upgraded.stat());
+    }
+
+    #[test]
+    fn vec_progress_validate_rejects_voter_count_exceeding_entries() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
+
+        progress.voter_count = 4;
+
+        let err = progress.validate_voter_count().unwrap_err();
+        assert_err_contains(err, "voter_count 4 exceeds entry count 3");
+        assert_initial_invalid_contains(&progress, "voter_count 4 exceeds entry count 3");
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "progress() >= &prev_progress")]
+    fn vec_progress_update_entry_with_panics_on_lowered_progress() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
+
+        progress.update_progress(&0, 5);
+        progress.update_entry_with(&0, |entry| entry.1 = 3);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "progress() <= &prev_progress")]
+    fn vec_progress_reset_entry_with_panics_on_raised_progress() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
+
+        progress.reset_entry_with(&0, |entry| entry.1 = 5);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "id() == id")]
+    fn vec_progress_update_entry_with_panics_on_id_change() {
+        let quorum_set = vec![btreeset! {0, 1, 2}];
+        let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
+
+        progress.update_entry_with(&0, |entry| entry.0 = 9);
     }
 }
