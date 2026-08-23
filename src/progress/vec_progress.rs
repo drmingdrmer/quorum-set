@@ -394,7 +394,7 @@ where
     }
 
     /// Return the tracked entry for `id`.
-    pub fn get(&self, id: &Entry::Id) -> Option<&Entry> {
+    pub fn try_get(&self, id: &Entry::Id) -> Option<&Entry> {
         let index = self.index(id)?;
         Some(&self.entries[index])
     }
@@ -408,6 +408,18 @@ where
     /// considered committed once the term-specific commit rule also allows it.
     pub fn quorum_accepted(&self) -> &Entry::Progress {
         &self.quorum_accepted
+    }
+
+    /// Return the quorum set that decides which entries constitute a quorum.
+    pub fn quorum_set(&self) -> &QS {
+        &self.quorum_set
+    }
+
+    /// Return the number of voter entries.
+    ///
+    /// [`Self::iter()`] yields these voters first, before the learners.
+    pub fn voter_count(&self) -> usize {
+        self.voter_count
     }
 
     /// Iterate over all entries, with voters first and learners after them.
@@ -1006,8 +1018,8 @@ mod tests {
         );
         assert_eq!(Some(&0), progress.update_progress(&0, 5));
         assert_eq!(Some(&5), progress.update_progress(&1, 5));
-        assert_eq!(Some(&(0, 5)), progress.get(&0));
-        assert_eq!(Some(&(1, 5)), progress.get(&1));
+        assert_eq!(Some(&(0, 5)), progress.try_get(&0));
+        assert_eq!(Some(&(1, 5)), progress.try_get(&1));
         assert_eq!(&5, progress.quorum_accepted());
     }
 
@@ -1031,12 +1043,12 @@ mod tests {
         let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [6, 7], |id| (id, 0));
 
         progress.update_progress(&6, 5);
-        assert_eq!(Some(&(6, 5)), progress.get(&6));
-        assert_eq!(Some(&5), progress.get(&6).map(|x| &x.1));
-        assert_eq!(None, progress.get(&9));
+        assert_eq!(Some(&(6, 5)), progress.try_get(&6));
+        assert_eq!(Some(&5), progress.try_get(&6).map(|x| &x.1));
+        assert_eq!(None, progress.try_get(&9));
 
         progress.update_progress(&6, 10);
-        assert_eq!(Some(&10), progress.get(&6).map(|x| &x.1));
+        assert_eq!(Some(&10), progress.try_get(&6).map(|x| &x.1));
     }
 
     #[test]
@@ -1158,12 +1170,12 @@ mod tests {
 
                 for step in 0..128 {
                     let id = next_random(&mut seed) % 8;
-                    let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
+                    let value = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default()
                         + next_random(&mut seed) % 7
                         + 1;
                     let got = copy_option(progress.update_progress(&id, value));
                     let want = model_quorum_accepted(&progress.quorum_set, &progress.entries);
-                    let want_result = progress.get(&id).map(|_| want);
+                    let want_result = progress.try_get(&id).map(|_| want);
                     let context =
                         format!("case-{case_id} seed-{seed} step-{step} update-{id}-{value}");
 
@@ -1201,7 +1213,7 @@ mod tests {
             for round in 0..24 {
                 for step in 0..16 {
                     let id = next_random(&mut seed) % 10;
-                    let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
+                    let value = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default()
                         + next_random(&mut seed) % 11
                         + 1;
                     progress.update_progress(&id, value);
@@ -1356,12 +1368,12 @@ mod tests {
         assert_eq!(Some(&4), got, "case 6: id:1, *=2");
 
         // Verify final values
-        assert_eq!(Some(&(0, 4)), progress.get(&0));
-        assert_eq!(Some(&(1, 4)), progress.get(&1));
-        assert_eq!(Some(&(2, 3)), progress.get(&2));
-        assert_eq!(Some(&(3, 2)), progress.get(&3));
-        assert_eq!(Some(&(4, 5)), progress.get(&4));
-        assert_eq!(Some(&(6, 0)), progress.get(&6));
+        assert_eq!(Some(&(0, 4)), progress.try_get(&0));
+        assert_eq!(Some(&(1, 4)), progress.try_get(&1));
+        assert_eq!(Some(&(2, 3)), progress.try_get(&2));
+        assert_eq!(Some(&(3, 2)), progress.try_get(&3));
+        assert_eq!(Some(&(4, 5)), progress.try_get(&4));
+        assert_eq!(Some(&(6, 0)), progress.try_get(&6));
 
         // Test nonexistent id returns None
         let got = progress.update_progress_with(&9, |x| *x = 10);
@@ -1450,7 +1462,11 @@ mod tests {
             p012_345.quorum_accepted(),
             "quorum extended from 012 to 012_345, quorum-accepted falls back"
         );
-        assert_eq!(Some(&(5, 9)), p012_345.get(&5), "inherit learner progress");
+        assert_eq!(
+            Some(&(5, 9)),
+            p012_345.try_get(&5),
+            "inherit learner progress"
+        );
 
         // When quorum set shrinks, quorum-accepted becomes greater.
 
@@ -1465,7 +1481,7 @@ mod tests {
             p345.quorum_accepted(),
             "shrink quorum set, greater value becomes quorum-accepted"
         );
-        assert_eq!(Some(&(1, 6)), p345.get(&1), "inherit voter progress");
+        assert_eq!(Some(&(1, 6)), p345.try_get(&1), "inherit voter progress");
     }
 
     #[test]
@@ -1547,9 +1563,9 @@ mod tests {
             }
         }
 
-        assert_eq!(Some(&(1, 10)), progress.get(&1));
-        assert_eq!(Some(&(0, 0)), progress.get(&0));
-        assert_eq!(Some(&(2, 0)), progress.get(&2));
+        assert_eq!(Some(&(1, 10)), progress.try_get(&1));
+        assert_eq!(Some(&(0, 0)), progress.try_get(&0));
+        assert_eq!(Some(&(2, 0)), progress.try_get(&2));
     }
 
     #[test]
@@ -1638,15 +1654,15 @@ mod tests {
 
         // Increase from 0 to 5
         progress.increase_to(&1, 5);
-        assert_eq!(Some(&(1, 5)), progress.get(&1));
+        assert_eq!(Some(&(1, 5)), progress.try_get(&1));
 
         // Try to decrease from 5 to 3 - should not change
         progress.increase_to(&1, 3);
-        assert_eq!(Some(&(1, 5)), progress.get(&1));
+        assert_eq!(Some(&(1, 5)), progress.try_get(&1));
 
         // Increase from 5 to 7
         progress.increase_to(&1, 7);
-        assert_eq!(Some(&(1, 7)), progress.get(&1));
+        assert_eq!(Some(&(1, 7)), progress.try_get(&1));
 
         // Try with nonexistent id
         let result = progress.increase_to(&9, 10);
@@ -1756,11 +1772,12 @@ mod tests {
                         // Reset to any value not above the current progress:
                         // both a full drop and a partial lowering that keeps
                         // the entry above the quorum-accepted value.
-                        let current = progress.get(&id).map(|entry| entry.1).unwrap_or_default();
+                        let current =
+                            progress.try_get(&id).map(|entry| entry.1).unwrap_or_default();
                         let value = next_random(&mut seed) % (current + 1);
                         progress.reset_entry_with(&id, |entry| entry.1 = value);
                     } else {
-                        let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
+                        let value = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default()
                             + next_random(&mut seed) % 7
                             + 1;
                         progress.update_progress(&id, value);
@@ -1927,11 +1944,11 @@ mod tests {
                 let context = format!("seed-{seed} step-{step} id-{id}");
 
                 if (next_random(&mut seed) >> 32).is_multiple_of(8) {
-                    let current = progress.get(&id).map(|entry| entry.1).unwrap_or_default();
+                    let current = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default();
                     let value = next_random(&mut seed) % (current + 1);
                     progress.reset_entry_with(&id, |entry| entry.1 = value);
                 } else {
-                    let value = progress.get(&id).map(|entry| entry.1).unwrap_or_default()
+                    let value = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default()
                         + next_random(&mut seed) % 7
                         + 1;
                     progress.update_progress(&id, value);
@@ -1972,9 +1989,17 @@ mod tests {
         // Shared IDs keep progress; the new group {6,7,8} starts at 0, so no
         // quorum has accepted any value above the default yet.
         assert_eq!(&0, upgraded.quorum_accepted());
-        assert_eq!(Some(&(0, 9)), upgraded.get(&0), "voter becomes learner");
-        assert_eq!(Some(&(9, 5)), upgraded.get(&9), "learner progress is kept");
-        assert_eq!(Some(&(3, 7)), upgraded.get(&3), "voter progress is kept");
+        assert_eq!(Some(&(0, 9)), upgraded.try_get(&0), "voter becomes learner");
+        assert_eq!(
+            Some(&(9, 5)),
+            upgraded.try_get(&9),
+            "learner progress is kept"
+        );
+        assert_eq!(
+            Some(&(3, 7)),
+            upgraded.try_get(&3),
+            "voter progress is kept"
+        );
         assert_matches_model(&upgraded, "after tree quorum upgrade");
     }
 
