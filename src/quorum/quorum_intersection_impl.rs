@@ -5,24 +5,34 @@ use crate::quorum::QuorumIntersection;
 
 /// Two joint configs are treated as having quorum intersection when they share at least one
 /// config: every quorum of one then intersects every quorum of the other. Sharing a config is
-/// sufficient but not necessary for that property, so this check can return `false` for a pair of
+/// sufficient but not necessary for that property, so this check answers `None` for a pair of
 /// configs whose quorums do in fact all intersect.
 impl<NID> QuorumIntersection<Vec<BTreeSet<NID>>> for Vec<BTreeSet<NID>>
 where NID: PartialOrd + Ord + Clone + 'static
 {
-    /// Return `true` when two joint quorum sets share a config.
+    /// Return `Some(true)` when two joint quorum sets share a config.
+    ///
+    /// Return `Some(false)` when either joint is empty: an empty joint accepts the empty set as a
+    /// quorum, and the empty set intersects nothing.
+    ///
+    /// Return `None` for every other pair, because the absence of a shared config proves nothing.
     ///
     /// Read more about extended membership change in OpenRaft:
     /// <https://docs.rs/openraft/latest/openraft/docs/data/extended_membership/index.html>
-    fn intersects_with(&self, other: &Vec<BTreeSet<NID>>) -> bool {
+    fn intersects_with(&self, other: &Vec<BTreeSet<NID>>) -> Option<bool> {
+        let either_is_empty = self.is_empty() || other.is_empty();
+        if either_is_empty {
+            return Some(false);
+        }
+
         for a in self {
             for b in other {
                 if a == b {
-                    return true;
+                    return Some(true);
                 }
             }
         }
-        false
+        None
     }
 }
 
@@ -31,7 +41,8 @@ impl<NID> QuorumBridge<BTreeSet<NID>> for Vec<BTreeSet<NID>>
 where NID: PartialOrd + Ord + Clone + 'static
 {
     fn bridge_to(&self, other: BTreeSet<NID>) -> Self {
-        if self.intersects_with(&vec![other.clone()]) {
+        let intersects = self.intersects_with(&vec![other.clone()]);
+        if intersects == Some(true) {
             vec![other]
         } else if let Some(last) = self.last() {
             vec![last.clone(), other]

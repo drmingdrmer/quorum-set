@@ -182,11 +182,14 @@ every quorum in the next. `QuorumIntersection` checks that relation for joint
 configurations, and `QuorumBridge` builds the intermediate joint config used
 when moving between memberships.
 
-`intersects_with` may be conservative: `true` guarantees the relation, while
-`false` can mean the implementation cannot prove it, in which case moving
-through a joint bridge is the safe path. `verify_intersection` computes the
-exact relation for any two quorum sets, including a read tree against a write
-tree.
+`intersects_with` returns `Option<bool>` because an implementation may use a
+condition that is sufficient but not necessary. `Some(true)` proves the
+relation, `Some(false)` proves a disjoint quorum pair, and `None` proves
+neither. The joint-config implementation proves `Some(true)` from a shared
+config and `Some(false)` from an empty joint, and answers `None` for every
+other pair, so anything other than `Some(true)` means moving through a joint
+bridge is the safe path. `verify_intersection` computes the exact relation for
+any two quorum sets, including a read tree against a write tree.
 
 ## Canonical IDs
 

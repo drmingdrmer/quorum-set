@@ -19,26 +19,27 @@ fn test_intersects_with() -> anyhow::Result<()> {
     let j123_345 = vec![s123(), s345()];
     let j345_789 = vec![s345(), s789()];
 
-    // `intersects_with` returns `true` iff the two joint quorum sets share a config.
-    assert!(j123.intersects_with(&j123));
-    assert!(!j123.intersects_with(&j345));
-    assert!(j123.intersects_with(&j123_345));
-    assert!(!j123.intersects_with(&j345_789));
+    // `intersects_with` returns `Some(true)` iff the two joint quorum sets share a
+    // config, and `None` otherwise: no shared config leaves the relation unproven.
+    assert_eq!(Some(true), j123.intersects_with(&j123));
+    assert_eq!(None, j123.intersects_with(&j345));
+    assert_eq!(Some(true), j123.intersects_with(&j123_345));
+    assert_eq!(None, j123.intersects_with(&j345_789));
 
-    assert!(!j345.intersects_with(&j123));
-    assert!(j345.intersects_with(&j345));
-    assert!(j345.intersects_with(&j123_345));
-    assert!(j345.intersects_with(&j345_789));
+    assert_eq!(None, j345.intersects_with(&j123));
+    assert_eq!(Some(true), j345.intersects_with(&j345));
+    assert_eq!(Some(true), j345.intersects_with(&j123_345));
+    assert_eq!(Some(true), j345.intersects_with(&j345_789));
 
-    assert!(j123_345.intersects_with(&j123));
-    assert!(j123_345.intersects_with(&j345));
-    assert!(j123_345.intersects_with(&j123_345));
-    assert!(j123_345.intersects_with(&j345_789));
+    assert_eq!(Some(true), j123_345.intersects_with(&j123));
+    assert_eq!(Some(true), j123_345.intersects_with(&j345));
+    assert_eq!(Some(true), j123_345.intersects_with(&j123_345));
+    assert_eq!(Some(true), j123_345.intersects_with(&j345_789));
 
-    assert!(!j345_789.intersects_with(&j123));
-    assert!(j345_789.intersects_with(&j345));
-    assert!(j345_789.intersects_with(&j123_345));
-    assert!(j345_789.intersects_with(&j345_789));
+    assert_eq!(None, j345_789.intersects_with(&j123));
+    assert_eq!(Some(true), j345_789.intersects_with(&j345));
+    assert_eq!(Some(true), j345_789.intersects_with(&j123_345));
+    assert_eq!(Some(true), j345_789.intersects_with(&j345_789));
 
     Ok(())
 }
@@ -51,9 +52,9 @@ fn test_intersects_with_empty_joint() -> anyhow::Result<()> {
     // An empty joint accepts every candidate set, including the empty set.
     // The empty set intersects nothing, so an empty joint has quorum
     // intersection with no joint config, not even itself.
-    assert!(!empty.intersects_with(&j123));
-    assert!(!j123.intersects_with(&empty));
-    assert!(!empty.intersects_with(&empty));
+    assert_eq!(Some(false), empty.intersects_with(&j123));
+    assert_eq!(Some(false), j123.intersects_with(&empty));
+    assert_eq!(Some(false), empty.intersects_with(&empty));
 
     Ok(())
 }
@@ -90,13 +91,13 @@ fn test_verify_intersection_exact_where_intersects_with_is_conservative() {
     let j12 = vec![btreeset! {1, 2}];
 
     // Every majority of {1,2} intersects every majority of {1,2,3}, but the
-    // shared-config heuristic cannot prove it: its `false` means "unknown".
+    // shared-config heuristic cannot prove it, so it answers `None`.
     assert!(verify_intersection(&j123, &j12));
-    assert!(!j123.intersects_with(&j12));
+    assert_eq!(None, j123.intersects_with(&j12));
 }
 
 #[test]
-fn test_intersects_with_true_implies_verified() {
+fn test_intersects_with_agrees_with_verify_intersection() {
     let joints: Vec<Vec<BTreeSet<u64>>> = vec![
         vec![],
         vec![btreeset! {1, 2, 3}],
@@ -105,12 +106,15 @@ fn test_intersects_with_true_implies_verified() {
         vec![btreeset! {3, 4, 5}, btreeset! {7, 8, 9}],
     ];
 
-    // The `intersects_with` error is one-sided: `true` implies the exact relation.
+    // `intersects_with` may answer `None`, but every `Some` answer must match the
+    // exact relation that `verify_intersection` computes.
     for a in &joints {
         for b in &joints {
-            if a.intersects_with(b) {
-                assert!(verify_intersection(a, b), "a: {a:?}, b: {b:?}");
-            }
+            let Some(intersects) = a.intersects_with(b) else {
+                continue;
+            };
+            let exact = verify_intersection(a, b);
+            assert_eq!(exact, intersects, "a: {a:?}, b: {b:?}");
         }
     }
 }

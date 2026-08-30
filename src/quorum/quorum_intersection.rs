@@ -28,16 +28,20 @@ where
     Self: QuorumSet,
     Other: QuorumSet<Id = Self::Id>,
 {
-    /// Return `true` only if every quorum of this quorum set intersects every
-    /// quorum of the other quorum set.
+    /// Return whether every quorum of this quorum set intersects every quorum
+    /// of the other quorum set.
     ///
-    /// The error is one-sided: `true` guarantees the relation, while `false`
-    /// may be conservative, because an implementation may use a check that is
-    /// sufficient but not necessary. Callers can act on `true`; on `false`
-    /// they must take the unconditionally safe path, e.g. bridge through a
-    /// joint config built by [`QuorumBridge`]. [`verify_intersection`]
-    /// computes the exact relation in exponential time.
-    fn intersects_with(&self, other: &Other) -> bool;
+    /// - `Some(true)`: the check proved that every quorum pair intersects.
+    /// - `Some(false)`: the check proved that some quorum pair is disjoint.
+    /// - `None`: the check proved neither. An implementation may use a condition that is sufficient
+    ///   but not necessary, so failing that condition tells the caller nothing about the true
+    ///   relation.
+    ///
+    /// Callers can act on `Some(true)`. On `Some(false)` and on `None` they
+    /// must take the unconditionally safe path, e.g. bridge through a joint
+    /// config built by [`QuorumBridge`]. [`verify_intersection`] computes the
+    /// exact relation in exponential time.
+    fn intersects_with(&self, other: &Other) -> Option<bool>;
 }
 
 /// Builds an intermediate quorum set that has [`QuorumIntersection`] with both
@@ -66,7 +70,7 @@ where
 /// sets.
 ///
 /// Returns `true` iff every quorum of `a` intersects every quorum of `b`.
-/// Unlike [`QuorumIntersection::intersects_with`], which may be conservative,
+/// Unlike [`QuorumIntersection::intersects_with`], which may answer `None`,
 /// this check is exact for any two [`QuorumSet`] implementations, e.g. a read
 /// [`QuorumTree`] against a write [`QuorumTree`].
 ///
