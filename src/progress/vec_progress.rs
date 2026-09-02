@@ -686,7 +686,7 @@ mod tests {
 
     impl<ID, Val, Data> VecProgressEntry for IdValData<ID, Val, Data>
     where
-        ID: 'static + PartialEq,
+        ID: PartialEq,
         Val: Clone + Default + Ord,
     {
         type Id = ID;
@@ -707,7 +707,7 @@ mod tests {
 
     impl<ID, Val, Data> VecProgressEntryData for IdValData<ID, Val, Data>
     where
-        ID: 'static + PartialEq,
+        ID: PartialEq,
         Val: Clone + Default + Ord,
     {
         type Data = Data;

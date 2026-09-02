@@ -13,7 +13,7 @@ use crate::QuorumTree;
 /// [`QuorumTree`] rules.
 pub trait QuorumSet {
     /// Node ID type in this quorum set.
-    type Id: 'static;
+    type Id;
 
     /// Iterator over every voter ID tracked by this quorum set.
     ///
@@ -21,7 +21,10 @@ pub trait QuorumSet {
     type Iter: Iterator<Item = Self::Id>;
 
     /// Return `true` if the candidate IDs satisfy this quorum rule.
-    fn is_quorum<'a, I: Iterator<Item = &'a Self::Id> + Clone>(&self, ids: I) -> bool;
+    fn is_quorum<'a, I>(&self, ids: I) -> bool
+    where
+        Self::Id: 'a,
+        I: Iterator<Item = &'a Self::Id> + Clone;
 
     /// Return all voter IDs in this quorum set.
     fn ids(&self) -> Self::Iter;
@@ -32,7 +35,11 @@ impl<T: QuorumSet> QuorumSet for Arc<T> {
 
     type Iter = T::Iter;
 
-    fn is_quorum<'a, I: Iterator<Item = &'a Self::Id> + Clone>(&self, ids: I) -> bool {
+    fn is_quorum<'a, I>(&self, ids: I) -> bool
+    where
+        Self::Id: 'a,
+        I: Iterator<Item = &'a Self::Id> + Clone,
+    {
         self.as_ref().is_quorum(ids)
     }
 

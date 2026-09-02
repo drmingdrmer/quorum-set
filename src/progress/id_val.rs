@@ -40,7 +40,7 @@ where Val: Default
 
 impl<ID, Val> VecProgressEntry for IdVal<ID, Val>
 where
-    ID: 'static + PartialEq,
+    ID: PartialEq,
     Val: Clone + Default + Ord,
 {
     type Id = ID;

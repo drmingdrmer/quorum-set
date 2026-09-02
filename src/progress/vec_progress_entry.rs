@@ -7,7 +7,7 @@ use crate::VecProgress;
 /// application-owned state.
 pub trait VecProgressEntry {
     /// ID type of the entry.
-    type Id: 'static + PartialEq;
+    type Id: PartialEq;
 
     /// Ordered progress value type.
     type Progress: Clone + Default + Ord;
@@ -48,7 +48,7 @@ pub trait VecProgressEntryData: VecProgressEntry {
 
 impl<ID, Progress> VecProgressEntry for (ID, Progress)
 where
-    ID: 'static + PartialEq,
+    ID: PartialEq,
     Progress: Clone + Default + Ord,
 {
     type Id = ID;

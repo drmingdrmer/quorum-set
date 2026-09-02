@@ -8,7 +8,7 @@ use crate::quorum::QuorumIntersection;
 /// sufficient but not necessary for that property, so this check answers `None` for a pair of
 /// configs whose quorums do in fact all intersect.
 impl<NID> QuorumIntersection<Vec<BTreeSet<NID>>> for Vec<BTreeSet<NID>>
-where NID: PartialOrd + Ord + Clone + 'static
+where NID: PartialOrd + Ord + Clone
 {
     /// Return `Some(true)` when two joint quorum sets share a config.
     ///
@@ -38,7 +38,7 @@ where NID: PartialOrd + Ord + Clone + 'static
 
 /// Builds an intermediate joint quorum set for a target flat config.
 impl<NID> QuorumBridge<BTreeSet<NID>> for Vec<BTreeSet<NID>>
-where NID: PartialOrd + Ord + Clone + 'static
+where NID: PartialOrd + Ord + Clone
 {
     fn bridge_to(&self, other: BTreeSet<NID>) -> Self {
         let intersects = self.intersects_with(&vec![other.clone()]);

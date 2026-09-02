@@ -11,12 +11,16 @@ use crate::quorum::quorum_set::QuorumSet;
 /// an empty joint config ([`Vec<BTreeSet>`]), which accepts every candidate
 /// set.
 impl<ID> QuorumSet for BTreeSet<ID>
-where ID: PartialOrd + Ord + Clone + 'static
+where ID: PartialOrd + Ord + Clone
 {
     type Id = ID;
     type Iter = std::collections::btree_set::IntoIter<ID>;
 
-    fn is_quorum<'a, I: Iterator<Item = &'a ID> + Clone>(&self, ids: I) -> bool {
+    fn is_quorum<'a, I>(&self, ids: I) -> bool
+    where
+        ID: 'a,
+        I: Iterator<Item = &'a ID> + Clone,
+    {
         let mut count = 0;
         let limit = self.len();
         for id in self {
@@ -42,12 +46,16 @@ where ID: PartialOrd + Ord + Clone + 'static
 /// config IDs. An empty [`Vec`] accepts every candidate set: with no member
 /// config, the requirement is vacuously satisfied.
 impl<NID> QuorumSet for Vec<BTreeSet<NID>>
-where NID: PartialOrd + Ord + Clone + 'static
+where NID: PartialOrd + Ord + Clone
 {
     type Id = NID;
     type Iter = std::collections::btree_set::IntoIter<NID>;
 
-    fn is_quorum<'a, I: Iterator<Item = &'a NID> + Clone>(&self, ids: I) -> bool {
+    fn is_quorum<'a, I>(&self, ids: I) -> bool
+    where
+        NID: 'a,
+        I: Iterator<Item = &'a NID> + Clone,
+    {
         for config in self {
             if !config.is_quorum(ids.clone()) {
                 return false;
@@ -70,12 +78,16 @@ where NID: PartialOrd + Ord + Clone + 'static
 /// Evaluation follows the tree structure. `ids()` returns all leaf IDs once,
 /// even when the same node appears in more than one subtree.
 impl<ID> QuorumSet for QuorumTree<ID>
-where ID: Ord + Clone + 'static
+where ID: Ord + Clone
 {
     type Id = ID;
     type Iter = std::collections::btree_set::IntoIter<ID>;
 
-    fn is_quorum<'a, I: Iterator<Item = &'a ID> + Clone>(&self, ids: I) -> bool {
+    fn is_quorum<'a, I>(&self, ids: I) -> bool
+    where
+        ID: 'a,
+        I: Iterator<Item = &'a ID> + Clone,
+    {
         self.spec.is_quorum(ids)
     }
 
