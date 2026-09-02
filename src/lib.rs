@@ -1,6 +1,4 @@
 #![doc = include_str!("../README.md")]
-#![cfg_attr(feature = "bench", allow(unused_features))]
-#![cfg_attr(feature = "bench", feature(test))]
 #![warn(missing_docs)]
 
 pub use progress::DisplayVecProgress;

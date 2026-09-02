@@ -8,10 +8,6 @@ mod quorum_intersection_impl;
 mod quorum_set;
 mod quorum_set_impl;
 
-#[cfg(feature = "bench")]
-#[cfg(test)]
-mod bench;
-
 #[cfg(test)]
 mod quorum_intersection_test;
 #[cfg(test)]

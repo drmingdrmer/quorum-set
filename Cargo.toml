@@ -16,13 +16,22 @@ license = "Apache-2.0"
 repository = "https://github.com/drmingdrmer/quorum-set"
 readme = "README.md"
 
+[lib]
+bench = false
+
 [dependencies]
 sha2 = { version = "0.10" }
 validit = { version = "0.2.6", default-features = false }
 
 [dev-dependencies]
 anyhow = { version = "1.0" }
+criterion = { version = "0.8.2" }
 maplit = { version = "1.0.2" }
 
-[features]
-bench = []
+[[bench]]
+name = "is_quorum"
+harness = false
+
+[[bench]]
+name = "vec_progress_update"
+harness = false

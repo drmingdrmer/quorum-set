@@ -15,9 +15,6 @@
 #[cfg(doc)]
 use crate::QuorumSet;
 
-#[cfg(feature = "bench")]
-#[cfg(test)]
-mod bench;
 mod display_vec_progress;
 mod id_val;
 mod progress_stats;
