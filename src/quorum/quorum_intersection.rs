@@ -78,9 +78,9 @@ where
 /// disjoint quorum pair exists iff for some split, `S` is a quorum of `a` and
 /// `U ∖ S` is a quorum of `b`. Quorum sets are upward-closed, so "some quorum
 /// of `b` fits inside `U ∖ S`" is the same as "`U ∖ S` is itself a quorum of
-/// `b`". This argument relies on IDs outside [`QuorumSet::ids`] never
-/// affecting [`QuorumSet::is_quorum`], which holds for every implementation
-/// in this crate.
+/// `b`". This argument relies on two [`QuorumSet`] rules: implementations are
+/// upward-closed, and IDs outside [`QuorumSet::ids`] never affect
+/// [`QuorumSet::is_quorum`].
 ///
 /// The check runs `2^n` quorum evaluations for `n` distinct IDs. It is meant
 /// for validating small configurations and as a test oracle.
