@@ -4,6 +4,11 @@
 It also provides a single quorum-evaluation trait and a progress tracker for
 applying those rules in consensus systems.
 
+The `QuorumSet`, `QuorumIntersection`, and `QuorumBridge` traits and the
+`VecProgress` tracker were extracted from the `quorum` and `progress` modules of
+[openraft](https://github.com/databendlabs/openraft). `QuorumTree` and
+`CanonicalId` are new to this crate.
+
 The shared abstraction is `QuorumSet`: given candidate node IDs, it answers
 whether those IDs form a quorum and exposes the full voter ID set. The crate
 ships three implementations:
@@ -199,3 +204,9 @@ trait. Tree equality and ordering are based on this canonical ID.
 User-defined node IDs may implement `CanonicalId`. When those IDs are embedded
 as `Node::Id`, this crate escapes short canonical IDs and hashes long canonical
 IDs, so tree IDs remain unambiguous and bounded.
+
+## License
+
+Licensed under either of the [MIT License](https://opensource.org/licenses/MIT)
+or the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), at
+your choosing.

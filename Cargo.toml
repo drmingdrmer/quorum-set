@@ -8,13 +8,14 @@ authors = [
     "Zhang Yanpo <drdr.xp@gmail.com>",
 ]
 categories = ["algorithms", "data-structures"]
-description = "Hierarchical quorum trees with deterministic canonical IDs"
+description = "Quorum sets, hierarchical quorum trees, and quorum-accepted progress tracking for consensus protocols"
 documentation = "https://docs.rs/quorum-set"
 homepage = "https://github.com/drmingdrmer/quorum-set"
 keywords = ["quorum", "raft", "consensus"]
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/drmingdrmer/quorum-set"
 readme = "README.md"
+exclude = [".github", ".gitignore", "Makefile", "rust-toolchain", "rustfmt.toml"]
 
 [lib]
 bench = false
