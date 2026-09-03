@@ -11,7 +11,7 @@ use crate::quorum::quorum_set::QuorumSet;
 /// an empty joint config ([`Vec<BTreeSet>`]), which accepts every candidate
 /// set.
 impl<ID> QuorumSet for BTreeSet<ID>
-where ID: PartialOrd + Ord + Clone
+where ID: Ord + Clone
 {
     type Id = ID;
     type Iter = std::collections::btree_set::IntoIter<ID>;
@@ -45,16 +45,16 @@ where ID: PartialOrd + Ord + Clone
 /// member config. [`QuorumSet::ids`] returns the deduplicated union of all
 /// config IDs. An empty [`Vec`] accepts every candidate set: with no member
 /// config, the requirement is vacuously satisfied.
-impl<NID> QuorumSet for Vec<BTreeSet<NID>>
-where NID: PartialOrd + Ord + Clone
+impl<ID> QuorumSet for Vec<BTreeSet<ID>>
+where ID: Ord + Clone
 {
-    type Id = NID;
-    type Iter = std::collections::btree_set::IntoIter<NID>;
+    type Id = ID;
+    type Iter = std::collections::btree_set::IntoIter<ID>;
 
     fn is_quorum<'a, I>(&self, ids: I) -> bool
     where
-        NID: 'a,
-        I: Iterator<Item = &'a NID> + Clone,
+        ID: 'a,
+        I: Iterator<Item = &'a ID> + Clone,
     {
         for config in self {
             if !config.is_quorum(ids.clone()) {

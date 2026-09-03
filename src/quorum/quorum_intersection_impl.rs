@@ -7,8 +7,8 @@ use crate::quorum::QuorumIntersection;
 /// config: every quorum of one then intersects every quorum of the other. Sharing a config is
 /// sufficient but not necessary for that property, so this check answers `None` for a pair of
 /// configs whose quorums do in fact all intersect.
-impl<NID> QuorumIntersection<Vec<BTreeSet<NID>>> for Vec<BTreeSet<NID>>
-where NID: PartialOrd + Ord + Clone
+impl<ID> QuorumIntersection<Vec<BTreeSet<ID>>> for Vec<BTreeSet<ID>>
+where ID: Ord + Clone
 {
     /// Return `Some(true)` when two joint quorum sets share a config.
     ///
@@ -19,7 +19,7 @@ where NID: PartialOrd + Ord + Clone
     ///
     /// Read more about extended membership change in OpenRaft:
     /// <https://docs.rs/openraft/latest/openraft/docs/data/extended_membership/index.html>
-    fn intersects_with(&self, other: &Vec<BTreeSet<NID>>) -> Option<bool> {
+    fn intersects_with(&self, other: &Vec<BTreeSet<ID>>) -> Option<bool> {
         let either_is_empty = self.is_empty() || other.is_empty();
         if either_is_empty {
             return Some(false);
@@ -37,10 +37,10 @@ where NID: PartialOrd + Ord + Clone
 }
 
 /// Builds an intermediate joint quorum set for a target flat config.
-impl<NID> QuorumBridge<BTreeSet<NID>> for Vec<BTreeSet<NID>>
-where NID: PartialOrd + Ord + Clone
+impl<ID> QuorumBridge<BTreeSet<ID>> for Vec<BTreeSet<ID>>
+where ID: Ord + Clone
 {
-    fn bridge_to(&self, other: BTreeSet<NID>) -> Self {
+    fn bridge_to(&self, other: BTreeSet<ID>) -> Self {
         let intersects = self.intersects_with(&vec![other.clone()]);
         if intersects == Some(true) {
             vec![other]

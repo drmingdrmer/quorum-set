@@ -539,12 +539,13 @@ where
             let item = &pair[1];
             if previous.progress() < item.progress() {
                 let (voter_progress, learner_progress) = progress_state();
-                return Err(invalid(format!(
+                return Err(format!(
                     "voter progress above quorum_accepted is not descending: quorum_accepted={:?}, previous_entry={:?}, out_of_order_entry={:?}, voter_progress={voter_progress:?}, learner_progress={learner_progress:?}",
                     self.quorum_accepted,
                     (previous_index, previous.id(), previous.progress()),
                     (previous_index + 1, item.id(), item.progress())
-                )));
+                )
+                .into());
             }
         }
 
@@ -555,22 +556,16 @@ where
 
             let index = suffix_start + suffix_offset;
             let (voter_progress, learner_progress) = progress_state();
-            return Err(invalid(format!(
+            return Err(format!(
                 "voter progress above quorum_accepted appears after the unsorted suffix: quorum_accepted={:?}, out_of_order_entry={:?}, voter_progress={voter_progress:?}, learner_progress={learner_progress:?}",
                 self.quorum_accepted,
                 (index, item.id(), item.progress())
-            )));
+            )
+            .into());
         }
 
         Ok(())
     }
-}
-
-fn invalid(message: impl Into<String>) -> Box<dyn Error> {
-    Box::new(std::io::Error::new(
-        std::io::ErrorKind::InvalidData,
-        message.into(),
-    ))
 }
 
 #[cfg(test)]

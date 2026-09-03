@@ -45,7 +45,9 @@ pub trait QuorumSet {
     fn ids(&self) -> Self::Iter;
 }
 
-impl<T: QuorumSet> QuorumSet for Arc<T> {
+impl<T> QuorumSet for Arc<T>
+where T: QuorumSet
+{
     type Id = T::Id;
 
     type Iter = T::Iter;
