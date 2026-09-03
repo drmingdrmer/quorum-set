@@ -196,17 +196,6 @@ where QS: QuorumSet<Id = u64> {
     }
 }
 
-fn assert_initial_invalid_contains<QS>(progress: &VecProgress<(u64, u64), QS>, want: &str)
-where QS: QuorumSet<Id = u64> {
-    let err = progress.validate_initial_state().unwrap_err().to_string();
-    assert!(err.contains(want), "error: {err}");
-}
-
-fn assert_err_contains(err: Box<dyn std::error::Error>, want: &str) {
-    let err = err.to_string();
-    assert!(err.contains(want), "error: {err}");
-}
-
 #[test]
 fn vec_progress_new() {
     let quorum_set = vec![btreeset! {0, 1, 2, 3, 4}];
@@ -262,36 +251,6 @@ fn vec_progress_new_computes_initial_quorum_accepted_below_default() {
     let progress = VecProgress::<(u64, i64), _>::new(quorum_set, [], |id| (id, -5));
 
     assert_eq!(&-5, progress.quorum_accepted());
-}
-
-#[test]
-fn vec_progress_validate_rejects_duplicate_entry_ids() {
-    let quorum_set = vec![btreeset! {0, 1, 2}];
-    let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
-
-    progress.entries[3].0 = 1;
-
-    assert!(progress.validate().is_ok());
-    assert_initial_invalid_contains(&progress, "duplicate entry id");
-    assert_initial_invalid_contains(&progress, "1: [1, 3]");
-}
-
-#[test]
-fn vec_progress_validate_reports_membership_mismatches() {
-    let quorum_set = vec![btreeset! {0, 1, 2}];
-    let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3, 4], |id| (id, 0));
-
-    progress.entries[0].0 = 9;
-    progress.entries[3].0 = 2;
-
-    let err = progress.validate_quorum_membership().unwrap_err();
-    assert_err_contains(err, "missing_voter_ids={0}");
-
-    let err = progress.validate_quorum_membership().unwrap_err();
-    assert_err_contains(err, "extra_voter_ids={9}");
-
-    let err = progress.validate_quorum_membership().unwrap_err();
-    assert_err_contains(err, "learner_voter_ids={2}");
 }
 
 #[test]
@@ -613,15 +572,7 @@ fn vec_progress_joint_quorum_update_progress() {
 #[test]
 fn vec_progress_non_member_and_learner_edge_cases() {
     let quorum_set = vec![btreeset! {0, 1, 2}];
-    assert!(
-        std::panic::catch_unwind(|| {
-            VecProgress::<(u64, u64), _>::new(quorum_set.clone(), [1, 3, 3], |id| (id, 0))
-        })
-        .is_err(),
-        "duplicate IDs are invalid"
-    );
-
-    let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [3], |id| (id, 0));
+    let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [1, 3, 3], |id| (id, 0));
 
     assert_eq!(vec![(0, 0), (1, 0), (2, 0), (3, 0)], progress.entries);
     assert_eq!(3, progress.voter_count);
@@ -1354,18 +1305,6 @@ fn vec_progress_upgrade_quorum_set_preserves_stat() {
     let upgraded = progress.upgrade_quorum_set(vec![btreeset! {1, 2, 3}], [0], |id| (id, 0));
 
     assert_eq!(&stat, upgraded.stat());
-}
-
-#[test]
-fn vec_progress_validate_rejects_voter_count_exceeding_entries() {
-    let quorum_set = vec![btreeset! {0, 1, 2}];
-    let mut progress = VecProgress::<(u64, u64), _>::new(quorum_set, [], |id| (id, 0));
-
-    progress.voter_count = 4;
-
-    let err = progress.validate_voter_count().unwrap_err();
-    assert_err_contains(err, "voter_count 4 exceeds entry count 3");
-    assert_initial_invalid_contains(&progress, "voter_count 4 exceeds entry count 3");
 }
 
 #[cfg(debug_assertions)]

@@ -85,16 +85,22 @@ where
     /// Create a progress tracker from a quorum set and learner IDs.
     ///
     /// Voters are created from `quorum_set.ids()`. Learners are tracked after
-    /// voters and never contribute to quorum acceptance. `default_entry` builds
-    /// the initial entry for every voter and learner ID; entries may start at
-    /// any progress value, and the initial quorum-accepted value is computed
-    /// from the initial voter progress.
+    /// voters and never contribute to quorum acceptance. Every ID is tracked
+    /// once: a learner ID that `quorum_set.ids()` also yields is a voter, and
+    /// repeated IDs are ignored. `default_entry` builds the initial entry for
+    /// every voter and learner ID; entries may start at any progress value, and
+    /// the initial quorum-accepted value is computed from the initial voter
+    /// progress.
     pub fn new(
         quorum_set: QS,
         learner_ids: impl IntoIterator<Item = Entry::Id>,
         mut default_entry: impl FnMut(Entry::Id) -> Entry,
     ) -> Self {
-        let mut entries = quorum_set.ids().map(&mut default_entry).collect::<Vec<_>>();
+        let voter_ids = quorum_set.ids().collect::<BTreeSet<_>>();
+        let learner_ids =
+            learner_ids.into_iter().filter(|id| !voter_ids.contains(id)).collect::<BTreeSet<_>>();
+
+        let mut entries = voter_ids.into_iter().map(&mut default_entry).collect::<Vec<_>>();
 
         let voter_count = entries.len();
 
@@ -113,15 +119,13 @@ where
 
         entries.extend(learner_ids.into_iter().map(default_entry));
 
-        let this = Self {
+        Self {
             quorum_set,
             quorum_accepted,
             voter_count,
             entries,
             stat: Default::default(),
-        };
-        this.validate_initial_state().expect("VecProgress construction invariant violation");
-        this
+        }
     }
 
     /// Find the index of the specified id.
@@ -496,7 +500,7 @@ where
 {
     /// Validates the voter-order invariant maintained after progress updates.
     fn validate(&self) -> Result<(), Box<dyn Error>> {
-        self.validate_progress()
+        self.validate_voter_order()
     }
 }
 
@@ -507,89 +511,6 @@ where
     Entry::Progress: Debug,
     QS: QuorumSet<Id = Entry::Id>,
 {
-    /// Validates all construction-time invariants for a new [`VecProgress`].
-    fn validate_initial_state(&self) -> Result<(), Box<dyn Error>> {
-        self.validate_voter_count()?;
-        self.validate_unique_entry_ids()?;
-        self.validate_quorum_membership()?;
-        self.validate_progress()?;
-
-        Ok(())
-    }
-
-    /// Validates the voter-order invariant affected by progress updates.
-    fn validate_progress(&self) -> Result<(), Box<dyn Error>> {
-        self.validate_voter_order()
-    }
-
-    /// Validates that `voter_count` partitions `entries` into a valid voter
-    /// prefix and learner suffix.
-    fn validate_voter_count(&self) -> Result<(), Box<dyn Error>> {
-        if self.voter_count > self.entries.len() {
-            return Err(invalid(format!(
-                "voter_count {} exceeds entry count {}",
-                self.voter_count,
-                self.entries.len()
-            )));
-        }
-
-        Ok(())
-    }
-
-    /// Validates that every tracked entry ID is unique across both voters and
-    /// learners.
-    fn validate_unique_entry_ids(&self) -> Result<(), Box<dyn Error>> {
-        let mut positions = BTreeMap::<Entry::Id, Vec<usize>>::new();
-        for (i, entry) in self.entries.iter().enumerate() {
-            positions.entry(entry.id().clone()).or_default().push(i);
-        }
-
-        let duplicates = positions
-            .into_iter()
-            .filter(|(_, positions)| positions.len() > 1)
-            .collect::<BTreeMap<_, _>>();
-
-        if !duplicates.is_empty() {
-            return Err(invalid(format!("duplicate entry ids: {duplicates:?}")));
-        }
-
-        Ok(())
-    }
-
-    /// Validates that the quorum-set IDs exactly match the voter-entry IDs and
-    /// do not appear in the learner suffix.
-    fn validate_quorum_membership(&self) -> Result<(), Box<dyn Error>> {
-        let quorum_ids = self.quorum_set.ids().collect::<BTreeSet<_>>();
-        let voter_entry_ids = self.entries[..self.voter_count]
-            .iter()
-            .map(|entry| entry.id().clone())
-            .collect::<BTreeSet<_>>();
-        let learner_entry_ids = self.entries[self.voter_count..]
-            .iter()
-            .map(|entry| entry.id().clone())
-            .collect::<BTreeSet<_>>();
-
-        let missing_voter_ids =
-            quorum_ids.difference(&voter_entry_ids).cloned().collect::<BTreeSet<_>>();
-        let extra_voter_ids =
-            voter_entry_ids.difference(&quorum_ids).cloned().collect::<BTreeSet<_>>();
-        let learner_voter_ids =
-            learner_entry_ids.intersection(&quorum_ids).cloned().collect::<BTreeSet<_>>();
-
-        if quorum_ids.len() == self.voter_count
-            && missing_voter_ids.is_empty()
-            && extra_voter_ids.is_empty()
-            && learner_voter_ids.is_empty()
-        {
-            return Ok(());
-        }
-
-        Err(invalid(format!(
-            "quorum membership mismatch: quorum_ids={quorum_ids:?}, voter_entry_ids={voter_entry_ids:?}, learner_entry_ids={learner_entry_ids:?}, missing_voter_ids={missing_voter_ids:?}, extra_voter_ids={extra_voter_ids:?}, learner_voter_ids={learner_voter_ids:?}, voter_count={}",
-            self.voter_count
-        )))
-    }
-
     /// Validates that voter entries whose progress is greater than
     /// `quorum_accepted` form a descending prefix, reporting the first
     /// out-of-order entry with the current voter and learner progress state.
