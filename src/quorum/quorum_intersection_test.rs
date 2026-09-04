@@ -8,6 +8,22 @@ use crate::quorum::QuorumBridge;
 use crate::quorum::QuorumIntersection;
 use crate::quorum::verify_intersection;
 
+const UNIVERSE_SIZE: u64 = 5;
+
+fn all_configs() -> Vec<BTreeSet<u64>> {
+    (1..1u64 << UNIVERSE_SIZE)
+        .map(|mask| (0..UNIVERSE_SIZE).filter(|id| mask & (1 << id) != 0).collect())
+        .collect()
+}
+
+fn all_joints() -> Vec<Vec<BTreeSet<u64>>> {
+    let configs = all_configs();
+    let singles = configs.iter().map(|config| vec![config.clone()]);
+    let pairs =
+        configs.iter().flat_map(|a| configs.iter().map(move |b| vec![a.clone(), b.clone()]));
+    singles.chain(pairs).collect()
+}
+
 #[test]
 fn test_intersects_with() -> anyhow::Result<()> {
     let s123 = || btreeset! {1,2,3};
@@ -98,13 +114,13 @@ fn test_verify_intersection_exact_where_intersects_with_is_conservative() {
 
 #[test]
 fn test_intersects_with_agrees_with_verify_intersection() {
-    let joints: Vec<Vec<BTreeSet<u64>>> = vec![
+    let mut joints: Vec<Vec<BTreeSet<u64>>> = vec![
         vec![],
-        vec![btreeset! {1, 2, 3}],
         vec![btreeset! {3, 4, 5}],
         vec![btreeset! {1, 2, 3}, btreeset! {3, 4, 5}],
         vec![btreeset! {3, 4, 5}, btreeset! {7, 8, 9}],
     ];
+    joints.extend(all_joints());
 
     // `intersects_with` may answer `None`, but every `Some` answer must match the
     // exact relation that `verify_intersection` computes.
@@ -115,6 +131,26 @@ fn test_intersects_with_agrees_with_verify_intersection() {
             };
             let exact = verify_intersection(a, b);
             assert_eq!(exact, intersects, "a: {a:?}, b: {b:?}");
+        }
+    }
+}
+
+#[test]
+fn test_bridge_to_preserves_intersection() {
+    let joints = all_joints();
+    let goals = all_configs();
+
+    for current in &joints {
+        for goal in &goals {
+            let intermediate = current.bridge_to(goal.clone());
+            assert!(
+                verify_intersection(current, &intermediate),
+                "{current:?} must intersect its bridge {intermediate:?}"
+            );
+            assert!(
+                verify_intersection(&intermediate, goal),
+                "bridge {intermediate:?} must intersect its goal {goal:?}"
+            );
         }
     }
 }
