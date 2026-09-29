@@ -31,7 +31,7 @@ where ID: Ord + CanonicalId
                 f,
                 "Hash#{}:{:x}",
                 self.nodes.len(),
-                Sha256::digest(s.as_bytes())
+                crate::utils::HexableSlice::from(Sha256::digest(s.as_bytes()).as_ref())
             )?;
         } else {
             write!(f, "{}", s)?;
