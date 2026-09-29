@@ -56,7 +56,11 @@ where
 
                 let id = id.canonical_id();
                 if id.len() > MAX_CANONICAL_ID_LEN {
-                    write!(f, "Hash#1:{:x}", Sha256::digest(id.as_bytes()))?;
+                    write!(
+                        f,
+                        "Hash#1:{:x}",
+                        crate::utils::HexableSlice::from(Sha256::digest(id.as_bytes()).as_ref())
+                    )?;
                 } else {
                     fmt_escaped(&id, f)?;
                 }
