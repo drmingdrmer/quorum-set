@@ -468,9 +468,9 @@ fn vec_progress_matches_reference_model_for_monotonic_updates() {
             assert_matches_model(&progress, &format!("case-{case_id} seed-{seed} initial"));
 
             for step in 0..128 {
-                let id = next_random(&mut seed) % 8;
+                let id = (next_random(&mut seed) >> 32) % 8;
                 let value = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default()
-                    + next_random(&mut seed) % 7
+                    + (next_random(&mut seed) >> 32) % 7
                     + 1;
                 let got = copy_option(progress.update_progress(&id, value));
                 let want = model_quorum_accepted(&progress.quorum_set, &progress.entries);
