@@ -514,7 +514,7 @@ fn vec_progress_matches_reference_model_with_interleaved_operations() {
                 let current = progress.try_get(&id).map(|entry| entry.1).unwrap_or_default();
                 let operation = match (next_random(&mut seed) >> 32) % 3 {
                     0 => {
-                        let value = current + next_random(&mut seed) % 7 + 1;
+                        let value = current + (next_random(&mut seed) >> 32) % 7 + 1;
                         progress.update_progress(&id, value);
                         format!("update-{value}")
                     }
@@ -542,7 +542,7 @@ fn vec_progress_matches_reference_model_with_interleaved_operations() {
                 assert_voter_prefix_is_sorted(&progress, &context);
             }
 
-            let quorum_index = next_random(&mut seed) as usize % (quorum_sets.len() + 1);
+            let quorum_index = (next_random(&mut seed) >> 32) as usize % (quorum_sets.len() + 1);
             let quorum_set = if quorum_index == quorum_sets.len() {
                 let config_count = (next_random(&mut seed) >> 32) % 2 + 1;
                 (0..config_count)
@@ -561,10 +561,11 @@ fn vec_progress_matches_reference_model_with_interleaved_operations() {
 
             progress = progress.upgrade_quorum_set(quorum_set, learner_ids, |id| (id, 0));
             want = model_quorum_accepted(&progress.quorum_set, &progress.entries);
-            assert_matches_model(
-                &progress,
-                &format!("seed-{seed} round-{round} upgrade-{quorum_index}"),
+            let context = format!(
+                "seed-{seed} round-{round} upgrade-{quorum_index} {:?}",
+                progress.quorum_set
             );
+            assert_matches_model(&progress, &context);
         }
     }
 }
