@@ -3,6 +3,7 @@
 //! A quorum set is a collection of quorums, e.g., the quorum set of the majority of `{a,b,c}` is
 //! `{a,b}, {b,c}, {a,c}`.
 
+mod both_quorums;
 mod quorum_intersection;
 mod quorum_intersection_impl;
 mod quorum_set;
@@ -13,6 +14,7 @@ mod quorum_intersection_test;
 #[cfg(test)]
 mod quorum_set_test;
 
+pub use both_quorums::BothQuorums;
 pub use quorum_intersection::QuorumBridge;
 pub use quorum_intersection::QuorumIntersection;
 pub use quorum_intersection::verify_intersection;

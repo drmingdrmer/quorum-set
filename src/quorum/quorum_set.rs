@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 #[cfg(doc)]
+use crate::BothQuorums;
+#[cfg(doc)]
 use crate::QuorumTree;
 #[cfg(doc)]
 use crate::VecProgress;
@@ -22,8 +24,8 @@ use crate::verify_intersection;
 /// - Duplicate-safe: an ID that appears more than once in the `is_quorum()` input counts once, so
 ///   callers may pass an iterator with repeats.
 ///
-/// The crate provides implementations for flat majority sets, joint quorum sets, and hierarchical
-/// [`QuorumTree`] rules.
+/// The crate provides implementations for flat majority sets, joint quorum sets, hierarchical
+/// [`QuorumTree`] rules, and [`BothQuorums`], which requires both a read and a write quorum.
 pub trait QuorumSet {
     /// Node ID type in this quorum set.
     type Id;

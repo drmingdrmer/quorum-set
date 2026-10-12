@@ -6,6 +6,7 @@ pub use progress::IdVal;
 pub use progress::VecProgress;
 pub use progress::VecProgressEntry;
 pub use progress::VecProgressEntryData;
+pub use quorum::BothQuorums;
 pub use quorum::QuorumBridge;
 pub use quorum::QuorumIntersection;
 pub use quorum::QuorumSet;

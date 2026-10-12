@@ -11,11 +11,12 @@ The `QuorumSet`, `QuorumIntersection`, and `QuorumBridge` traits and the
 
 The shared abstraction is `QuorumSet`: given candidate node IDs, it answers
 whether those IDs form a quorum and exposes the full voter ID set. The crate
-ships three implementations:
+ships four implementations:
 
 - `BTreeSet<ID>`: a flat majority quorum.
 - `Vec<BTreeSet<ID>>`: a joint quorum, accepted only when every member config accepts.
 - `QuorumTree<ID>`: a hierarchical quorum built from nested `Node` values.
+- `BothQuorums<R, W>`: a read rule and a write rule, accepted only when both accept.
 
 `VecProgress` is the main consumer. It tracks per-node progress and maintains
 the greatest progress value accepted by the configured `QuorumSet`.
@@ -129,6 +130,38 @@ assert!(!verify_intersection(&read_quorum, &weak_write));
 In this example, a read quorum can be a single node, and the only write quorum
 contains all nodes. Therefore every read quorum intersects with every write
 quorum, even though read quorums do not intersect with each other.
+
+Two read quorums may be disjoint, and so may two write quorums. So neither rule
+alone can decide an election: two candidates could win disjoint quorums in the
+same term. `BothQuorums` accepts an ID set only when both the read rule and the
+write rule accept it. Each accepted set is then both a read quorum and a write
+quorum. So with cross-intersection, any two accepted sets intersect:
+
+```rust
+use quorum_set::{BothQuorums, Node, QuorumSet, QuorumTree, verify_intersection};
+
+fn all_of(ids: [u64; 2]) -> Node<u64> {
+    Node::Subtree(QuorumTree::new(2, ids.map(Node::Id)).unwrap())
+}
+
+// Nodes form a 2x2 grid, `1 2` over `3 4`.
+// A read quorum holds a row, and a write quorum holds a column.
+let read_quorum = QuorumTree::new(1, [all_of([1, 2]), all_of([3, 4])]).unwrap();
+let write_quorum = QuorumTree::new(1, [all_of([1, 3]), all_of([2, 4])]).unwrap();
+
+// The two rows are disjoint, but every row intersects every column.
+assert!(!verify_intersection(&read_quorum, &read_quorum));
+assert!(verify_intersection(&read_quorum, &write_quorum));
+
+let election_quorum = BothQuorums::new(read_quorum, write_quorum);
+
+// A row alone is not enough; a row plus a column is.
+assert!(!election_quorum.is_quorum([1, 2].iter()));
+assert!(election_quorum.is_quorum([1, 2, 3].iter()));
+
+// Any two sets that `election_quorum` accepts intersect.
+assert!(verify_intersection(&election_quorum, &election_quorum));
+```
 
 ## Hierarchical Quorums
 
