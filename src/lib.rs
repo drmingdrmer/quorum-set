@@ -10,6 +10,7 @@ pub use quorum::BothQuorums;
 pub use quorum::QuorumBridge;
 pub use quorum::QuorumIntersection;
 pub use quorum::QuorumSet;
+pub use quorum::ReadOrBoth;
 pub use quorum::verify_intersection;
 pub use tree::CanonicalId;
 pub use tree::Node;

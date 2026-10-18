@@ -11,12 +11,13 @@ The `QuorumSet`, `QuorumIntersection`, and `QuorumBridge` traits and the
 
 The shared abstraction is `QuorumSet`: given candidate node IDs, it answers
 whether those IDs form a quorum and exposes the full voter ID set. The crate
-ships four implementations:
+ships five implementations:
 
 - `BTreeSet<ID>`: a flat majority quorum.
 - `Vec<BTreeSet<ID>>`: a joint quorum, accepted only when every member config accepts.
 - `QuorumTree<ID>`: a hierarchical quorum built from nested `Node` values.
 - `BothQuorums<R, W>`: a read rule and a write rule, accepted only when both accept.
+- `ReadOrBoth<R, W>`: either the read rule alone or `BothQuorums<R, W>`, chosen at runtime.
 
 `VecProgress` is the main consumer. It tracks per-node progress and maintains
 the greatest progress value accepted by the configured `QuorumSet`.
@@ -161,6 +162,41 @@ assert!(election_quorum.is_quorum([1, 2, 3].iter()));
 
 // Any two sets that `election_quorum` accepts intersect.
 assert!(verify_intersection(&election_quorum, &election_quorum));
+```
+
+This election argument holds when two candidates of one term are not ordered,
+as in Raft. With totally ordered ballots, as in Paxos, two leaders always differ
+in ballot. A voter also rejects entries from a ballot smaller than one it
+granted. So read quorums need to intersect only write quorums, as
+[Flexible Paxos](https://arxiv.org/abs/1608.06696) shows, and the read rule
+alone can elect a leader. `ReadOrBoth` holds either the read rule alone or
+`BothQuorums`, so a protocol can pick its election rule at runtime:
+
+```rust
+use quorum_set::{BothQuorums, Node, QuorumSet, QuorumTree, ReadOrBoth};
+
+fn all_of(ids: [u64; 2]) -> Node<u64> {
+    Node::Subtree(QuorumTree::new(2, ids.map(Node::Id)).unwrap())
+}
+
+fn election_quorum<R, W>(totally_ordered: bool, read: R, write: W) -> ReadOrBoth<R, W> {
+    if totally_ordered {
+        ReadOrBoth::Read(read)
+    } else {
+        ReadOrBoth::Both(BothQuorums::new(read, write))
+    }
+}
+
+// The same 2x2 grid: a read quorum holds a row, and a write quorum holds a column.
+let read_quorum = QuorumTree::new(1, [all_of([1, 2]), all_of([3, 4])]).unwrap();
+let write_quorum = QuorumTree::new(1, [all_of([1, 3]), all_of([2, 4])]).unwrap();
+
+let paxos = election_quorum(true, read_quorum.clone(), write_quorum.clone());
+let raft = election_quorum(false, read_quorum, write_quorum);
+
+// A row alone elects a leader with totally ordered ballots, but not in Raft.
+assert!(paxos.is_quorum([1, 2].iter()));
+assert!(!raft.is_quorum([1, 2].iter()));
 ```
 
 ## Hierarchical Quorums

@@ -5,6 +5,8 @@ use crate::BothQuorums;
 #[cfg(doc)]
 use crate::QuorumTree;
 #[cfg(doc)]
+use crate::ReadOrBoth;
+#[cfg(doc)]
 use crate::VecProgress;
 #[cfg(doc)]
 use crate::verify_intersection;
@@ -26,6 +28,7 @@ use crate::verify_intersection;
 ///
 /// The crate provides implementations for flat majority sets, joint quorum sets, hierarchical
 /// [`QuorumTree`] rules, and [`BothQuorums`], which requires both a read and a write quorum.
+/// [`ReadOrBoth`] holds either a read rule alone or a [`BothQuorums`].
 pub trait QuorumSet {
     /// Node ID type in this quorum set.
     type Id;
