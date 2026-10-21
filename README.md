@@ -259,11 +259,14 @@ when moving between memberships.
 `intersects_with` returns `Option<bool>` because an implementation may use a
 condition that is sufficient but not necessary. `Some(true)` proves the
 relation, `Some(false)` proves a disjoint quorum pair, and `None` proves
-neither. The joint-config implementation proves `Some(true)` from a shared
-config and `Some(false)` from an empty joint, and answers `None` for every
-other pair, so anything other than `Some(true)` means moving through a joint
-bridge is the safe path. `verify_intersection` computes the exact relation for
-any two quorum sets, including a read tree against a write tree.
+neither. The flat-config implementation is exact and always answers `Some`.
+The joint-config implementation returns that exact answer for two uniform
+joints, proves `Some(true)` when some config of one joint intersects some
+config of the other, gives the exact answer when either joint is empty, and
+answers `None` for every other pair. Anything other than `Some(true)` means moving
+through a joint bridge is the safe path. `verify_intersection` computes the
+exact relation for any two quorum sets, including a read tree against a write
+tree.
 
 ## Canonical IDs
 

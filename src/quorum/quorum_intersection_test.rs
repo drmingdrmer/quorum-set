@@ -4,19 +4,18 @@ use maplit::btreeset;
 
 use crate::Node;
 use crate::QuorumTree;
-use crate::quorum::QuorumBridge;
 use crate::quorum::QuorumIntersection;
 use crate::quorum::verify_intersection;
 
 const UNIVERSE_SIZE: u64 = 5;
 
-fn all_configs() -> Vec<BTreeSet<u64>> {
+pub(super) fn all_configs() -> Vec<BTreeSet<u64>> {
     (1..1u64 << UNIVERSE_SIZE)
         .map(|mask| (0..UNIVERSE_SIZE).filter(|id| mask & (1 << id) != 0).collect())
         .collect()
 }
 
-fn all_joints() -> Vec<Vec<BTreeSet<u64>>> {
+pub(super) fn all_joints() -> Vec<Vec<BTreeSet<u64>>> {
     let configs = all_configs();
     let singles = configs.iter().map(|config| vec![config.clone()]);
     let pairs =
@@ -35,14 +34,15 @@ fn test_intersects_with() -> anyhow::Result<()> {
     let j123_345 = vec![s123(), s345()];
     let j345_789 = vec![s345(), s789()];
 
-    // `intersects_with` returns `Some(true)` iff the two joint quorum sets share a
-    // config, and `None` otherwise: no shared config leaves the relation unproven.
+    // Two uniform joints get the exact answer: {1,2} and {4,5} are disjoint
+    // majorities of {1,2,3} and {3,4,5}. Other joints answer `Some(true)` when
+    // some config pair intersects, and `None` when no pair does.
     assert_eq!(Some(true), j123.intersects_with(&j123));
-    assert_eq!(None, j123.intersects_with(&j345));
+    assert_eq!(Some(false), j123.intersects_with(&j345));
     assert_eq!(Some(true), j123.intersects_with(&j123_345));
     assert_eq!(None, j123.intersects_with(&j345_789));
 
-    assert_eq!(None, j345.intersects_with(&j123));
+    assert_eq!(Some(false), j345.intersects_with(&j123));
     assert_eq!(Some(true), j345.intersects_with(&j345));
     assert_eq!(Some(true), j345.intersects_with(&j123_345));
     assert_eq!(Some(true), j345.intersects_with(&j345_789));
@@ -64,13 +64,20 @@ fn test_intersects_with() -> anyhow::Result<()> {
 fn test_intersects_with_empty_joint() -> anyhow::Result<()> {
     let empty: Vec<BTreeSet<u64>> = vec![];
     let j123 = vec![btreeset! {1,2,3}];
+    let no_quorum = vec![BTreeSet::new(), btreeset! {1,2,3}];
 
     // An empty joint accepts every candidate set, including the empty set.
     // The empty set intersects nothing, so an empty joint has quorum
-    // intersection with no joint config, not even itself.
+    // intersection only with a joint that has no quorum: one that holds an
+    // empty config.
     assert_eq!(Some(false), empty.intersects_with(&j123));
     assert_eq!(Some(false), j123.intersects_with(&empty));
     assert_eq!(Some(false), empty.intersects_with(&empty));
+
+    let empty_with_no_quorum = empty.intersects_with(&no_quorum);
+    assert_eq!(Some(true), empty_with_no_quorum);
+    let no_quorum_with_empty = no_quorum.intersects_with(&empty);
+    assert_eq!(Some(true), no_quorum_with_empty);
 
     Ok(())
 }
@@ -103,19 +110,23 @@ fn test_verify_intersection_empty_joint() {
 
 #[test]
 fn test_verify_intersection_exact_where_intersects_with_is_conservative() {
-    let j123 = vec![btreeset! {1, 2, 3}];
-    let j12 = vec![btreeset! {1, 2}];
+    let j123_145 = vec![btreeset! {1, 2, 3}, btreeset! {1, 4, 5}];
+    let j2345 = vec![btreeset! {2, 3, 4, 5}];
 
-    // Every majority of {1,2} intersects every majority of {1,2,3}, but the
-    // shared-config heuristic cannot prove it, so it answers `None`.
-    assert!(verify_intersection(&j123, &j12));
-    assert_eq!(None, j123.intersects_with(&j12));
+    // Every quorum of the joint holds 2 of {2,3,4,5}, and every majority of
+    // {2,3,4,5} holds 3 of them, so the quorums intersect. No config pair
+    // proves it: {1,2} misses {3,4,5}, and {1,4} misses {2,3,5}.
+    let exact = verify_intersection(&j123_145, &j2345);
+    assert!(exact);
+    let intersects = j123_145.intersects_with(&j2345);
+    assert_eq!(None, intersects);
 }
 
 #[test]
 fn test_intersects_with_agrees_with_verify_intersection() {
     let mut joints: Vec<Vec<BTreeSet<u64>>> = vec![
         vec![],
+        vec![BTreeSet::new()],
         vec![btreeset! {3, 4, 5}],
         vec![btreeset! {1, 2, 3}, btreeset! {3, 4, 5}],
         vec![btreeset! {3, 4, 5}, btreeset! {7, 8, 9}],
@@ -131,26 +142,6 @@ fn test_intersects_with_agrees_with_verify_intersection() {
             };
             let exact = verify_intersection(a, b);
             assert_eq!(exact, intersects, "a: {a:?}, b: {b:?}");
-        }
-    }
-}
-
-#[test]
-fn test_bridge_to_preserves_intersection() {
-    let joints = all_joints();
-    let goals = all_configs();
-
-    for current in &joints {
-        for goal in &goals {
-            let intermediate = current.bridge_to(goal.clone());
-            assert!(
-                verify_intersection(current, &intermediate),
-                "{current:?} must intersect its bridge {intermediate:?}"
-            );
-            assert!(
-                verify_intersection(&intermediate, goal),
-                "bridge {intermediate:?} must intersect its goal {goal:?}"
-            );
         }
     }
 }
@@ -177,48 +168,108 @@ fn test_verify_intersection_tree_read_write() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_bridge_to() -> anyhow::Result<()> {
-    let s1 = || btreeset! {1,2,3};
-    let s2 = || btreeset! {3,4,5};
-    let s3 = || btreeset! {7,8,9};
+fn test_btree_set_intersects_with() {
+    let s123 = btreeset! {1, 2, 3};
+    let s124 = btreeset! {1, 2, 4};
+    let s1234 = btreeset! {1, 2, 3, 4};
+    let s1235 = btreeset! {1, 2, 3, 5};
 
-    let j1 = vec![s1()];
-    let j2 = vec![s2()];
-    let j12 = vec![s1(), s2()];
-    let j23 = vec![s2(), s3()];
+    // Adding a voter: every majority of {1,2,3,4} holds 2 of {1,2,3}.
+    let added = s123.intersects_with(&s1234);
+    assert_eq!(Some(true), added);
 
-    assert_eq!(j1, j1.bridge_to(s1()));
-    assert_eq!(j12, j1.bridge_to(s2()));
-    assert_eq!(j1, j12.bridge_to(s1()));
-    assert_eq!(j2, j12.bridge_to(s2()));
-    assert_eq!(j23, j12.bridge_to(s3()));
+    // Replacing one of four voters: every majority of either set holds 2 of {1,2,3}.
+    let replaced_of_four = s1234.intersects_with(&s1235);
+    assert_eq!(Some(true), replaced_of_four);
 
-    Ok(())
+    // Replacing one of three voters: {1,3} and {2,4} are disjoint majorities.
+    let replaced_of_three = s123.intersects_with(&s124);
+    assert_eq!(Some(false), replaced_of_three);
 }
 
 #[test]
-fn test_bridge_to_multi_config_joint() -> anyhow::Result<()> {
-    let s1 = || btreeset! {1,2,3};
-    let s2 = || btreeset! {3,4,5};
-    let s3 = || btreeset! {5,6,7};
-    let s4 = || btreeset! {7,8,9};
+fn test_btree_set_intersects_with_agrees_with_verify_intersection() {
+    let mut configs = all_configs();
+    configs.push(BTreeSet::new());
 
-    let joint = vec![s1(), s2(), s3()];
-
-    // Sharing any member config, not only the last one, keeps just the target.
-    assert_eq!(vec![s2()], joint.bridge_to(s2()));
-    // No shared config: joint of the last member config and the target.
-    assert_eq!(vec![s3(), s4()], joint.bridge_to(s4()));
-
-    Ok(())
+    // The flat check always answers, and every answer matches the exact relation.
+    for a in &configs {
+        for b in &configs {
+            let intersects = a.intersects_with(b);
+            let exact = verify_intersection(a, b);
+            assert_eq!(Some(exact), intersects, "a: {a:?}, b: {b:?}");
+        }
+    }
 }
 
 #[test]
-fn test_bridge_to_from_empty_joint_config() -> anyhow::Result<()> {
-    let joint: Vec<BTreeSet<u64>> = vec![];
-    let other = btreeset! {1,2,3};
+fn test_joint_intersects_with_config() {
+    let s123 = btreeset! {1, 2, 3};
+    let s124 = btreeset! {1, 2, 4};
+    let s1234 = btreeset! {1, 2, 3, 4};
+    let s2345 = btreeset! {2, 3, 4, 5};
+    let empty_config = BTreeSet::new();
 
-    assert_eq!(vec![other.clone()], joint.bridge_to(other));
+    let j123 = vec![s123.clone()];
+    let j123_145 = vec![s123.clone(), btreeset! {1, 4, 5}];
+    let empty_joint: Vec<BTreeSet<u64>> = vec![];
 
-    Ok(())
+    // A uniform joint gets the exact answer of the flat check.
+    let added = j123.intersects_with(&s1234);
+    assert_eq!(Some(true), added);
+    let replaced = j123.intersects_with(&s124);
+    assert_eq!(Some(false), replaced);
+
+    // Another joint answers `Some(true)` when one of its configs intersects the flat config, and
+    // `None` when none does, although every quorum of `j123_145` intersects every majority of
+    // {2,3,4,5}.
+    let one_config_intersects = j123_145.intersects_with(&s1234);
+    assert_eq!(Some(true), one_config_intersects);
+    let no_config_intersects = j123_145.intersects_with(&s2345);
+    assert_eq!(None, no_config_intersects);
+
+    // The empty set is a quorum of an empty joint. It misses every majority of {1,2,3}, and an
+    // empty config has no quorum to miss.
+    let empty_joint_with_config = empty_joint.intersects_with(&s123);
+    assert_eq!(Some(false), empty_joint_with_config);
+    let empty_joint_with_empty_config = empty_joint.intersects_with(&empty_config);
+    assert_eq!(Some(true), empty_joint_with_empty_config);
+
+    // A flat config gets the same answer from the other side.
+    let config_with_joint = s124.intersects_with(&j123);
+    assert_eq!(Some(false), config_with_joint);
+}
+
+#[test]
+fn test_joint_intersects_with_config_agrees_with_verify_intersection() {
+    let mut joints = all_joints();
+    joints.push(vec![]);
+    let mut configs = all_configs();
+    configs.push(BTreeSet::new());
+
+    // Both sides give the same answer. A joint of at most one config always gets the exact answer,
+    // and every `Some` answer for a larger joint matches the exact relation.
+    for joint in &joints {
+        for config in &configs {
+            let intersects = joint.intersects_with(config);
+            let reversed = config.intersects_with(joint);
+            assert_eq!(intersects, reversed, "joint: {joint:?}, config: {config:?}");
+
+            let exact = verify_intersection(joint, config);
+            let at_most_one_config = joint.len() <= 1;
+            if at_most_one_config {
+                assert_eq!(
+                    Some(exact),
+                    intersects,
+                    "joint: {joint:?}, config: {config:?}"
+                );
+                continue;
+            }
+
+            let Some(intersects) = intersects else {
+                continue;
+            };
+            assert_eq!(exact, intersects, "joint: {joint:?}, config: {config:?}");
+        }
+    }
 }
