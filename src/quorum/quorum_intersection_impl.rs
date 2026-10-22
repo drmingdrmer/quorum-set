@@ -14,9 +14,8 @@ where ID: Ord + Clone
     /// For other joints, return `Some(true)` when some config of `self` intersects some config of
     /// `other`.
     ///
-    /// When either joint is empty, return `Some(true)` exactly when the other joint holds an empty
-    /// config. An empty joint accepts the empty set as a quorum, and the empty set misses every
-    /// quorum of the other joint. A joint that holds an empty config has no quorum to miss.
+    /// When either joint is empty, return `Some(true)`: an empty joint has no quorum, so no pair
+    /// of quorums can be disjoint.
     ///
     /// Return `None` for every other pair: two configs that do not intersect prove nothing about
     /// two joints that contain them.
@@ -26,9 +25,7 @@ where ID: Ord + Clone
     fn intersects_with(&self, other: &Vec<BTreeSet<ID>>) -> Option<bool> {
         let either_is_empty = self.is_empty() || other.is_empty();
         if either_is_empty {
-            let empty_config = BTreeSet::new();
-            let holds_empty_config = self.contains(&empty_config) || other.contains(&empty_config);
-            return Some(holds_empty_config);
+            return Some(true);
         }
 
         let both_uniform = self.len() == 1 && other.len() == 1;
@@ -85,14 +82,13 @@ where ID: Ord + Clone
     /// Return the exact answer of the flat [`BTreeSet`] check when `self` holds one config. For
     /// other joints, return `Some(true)` when some config of `self` intersects `other`.
     ///
-    /// Return `Some(other.is_empty())` when `self` is empty: an empty joint accepts the empty set
-    /// as a quorum, and the empty set misses every quorum of a non-empty `other`. An empty `other`
-    /// has no quorum to miss.
+    /// Return `Some(true)` when `self` is empty: an empty joint has no quorum, so no pair of
+    /// quorums can be disjoint.
     ///
     /// Return `None` for every other pair.
     fn intersects_with(&self, other: &BTreeSet<ID>) -> Option<bool> {
         if self.is_empty() {
-            return Some(other.is_empty());
+            return Some(true);
         }
 
         let uniform = self.len() == 1;

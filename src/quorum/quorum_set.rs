@@ -16,7 +16,7 @@ use crate::verify_intersection;
 /// A quorum is a collection of nodes that a read or write operation in a distributed system has to
 /// contact. See: <http://web.mit.edu/6.033/2005/wwwdocs/quorum_note.html>
 ///
-/// Every implementation must follow three rules:
+/// Every implementation must follow four rules:
 ///
 /// - Upward-closed: adding IDs to an accepted quorum keeps it accepted. [`VecProgress`] and
 ///   [`verify_intersection`] rely on this rule.
@@ -25,6 +25,9 @@ use crate::verify_intersection;
 ///   `ids()` yields, so it relies on this rule.
 /// - Duplicate-safe: an ID that appears more than once in the `is_quorum()` input counts once, so
 ///   callers may pass an iterator with repeats.
+/// - No empty quorum: an input that holds no ID from `ids()`, such as an empty input, is never a
+///   quorum. An upward-closed rule that accepted the empty input would accept every input, so a
+///   read or write operation would succeed without contacting any node.
 ///
 /// The crate provides implementations for flat majority sets, joint quorum sets, hierarchical
 /// [`QuorumTree`] rules, and [`BothQuorums`], which requires both a read and a write quorum.
@@ -41,6 +44,7 @@ pub trait QuorumSet {
     /// Return `true` if the candidate IDs satisfy this quorum rule.
     ///
     /// Repeated IDs count once, and IDs that [`ids()`](Self::ids) does not yield are ignored.
+    /// An empty input is never a quorum.
     fn is_quorum<'a, I>(&self, ids: I) -> bool
     where
         Self::Id: 'a,

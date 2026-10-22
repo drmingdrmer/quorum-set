@@ -6,10 +6,10 @@ use crate::QuorumTree;
 
 /// An error returned when building an invalid [`QuorumTree`].
 ///
-/// Both cases are caller bugs: a correct quorum rule never contains the same
-/// child twice and never requires more children than it has. Construction
-/// reports them instead of repairing the input, so the mistake surfaces where
-/// it is made.
+/// All three cases are caller bugs: a correct quorum rule never contains the
+/// same child twice, never requires zero children, and never requires more
+/// children than it has. Construction reports them instead of repairing the
+/// input, so the mistake surfaces where it is made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QuorumTreeError {
     /// The same child node was given more than once.
@@ -26,6 +26,10 @@ pub enum QuorumTreeError {
         /// The number of child nodes.
         num_children: usize,
     },
+
+    /// `quorum_size` is `0`, so every input, even an empty one, would
+    /// satisfy the tree.
+    ZeroQuorumSize,
 }
 
 impl fmt::Display for QuorumTreeError {
@@ -42,6 +46,9 @@ impl fmt::Display for QuorumTreeError {
                     f,
                     "quorum size {quorum_size} exceeds the number of child nodes {num_children}"
                 )
+            }
+            Self::ZeroQuorumSize => {
+                write!(f, "quorum size 0 accepts every input, even an empty one")
             }
         }
     }
@@ -67,6 +74,13 @@ mod tests {
         assert_eq!(
             "quorum size 3 exceeds the number of child nodes 2",
             err.to_string()
+        );
+
+        let err = QuorumTreeError::ZeroQuorumSize;
+        let message = err.to_string();
+        assert_eq!(
+            "quorum size 0 accepts every input, even an empty one",
+            message
         );
     }
 }

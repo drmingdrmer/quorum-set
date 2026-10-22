@@ -54,7 +54,8 @@ voter IDs, so it is intended for validating small configurations and for
 tests.
 
 Construction rejects invalid tree rules: `QuorumTree::new` returns an error on
-a duplicate child node or on a `quorum_size` larger than the number of children.
+a duplicate child node, on a `quorum_size` of `0`, or on a `quorum_size` larger
+than the number of children.
 
 ## Quorum Sets
 

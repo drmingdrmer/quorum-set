@@ -1214,8 +1214,8 @@ fn vec_progress_zero_voters() {
     assert_eq!(vec![(1, 0), (2, 0)], progress.entries);
     assert_eq!(Some(false), progress.is_voter(&1));
 
-    // An empty joint accepts every candidate set, but there is no voter
-    // progress to accept: quorum-accepted stays at the default value.
+    // An empty joint accepts no candidate set: quorum-accepted stays at the
+    // default value.
     assert_eq!(Some(&0), progress.update_progress(&1, 5));
     assert_eq!(&0, progress.quorum_accepted());
     assert_matches_model(&progress, "zero voters");

@@ -66,13 +66,14 @@ fn test_intersects_with_empty_joint() -> anyhow::Result<()> {
     let j123 = vec![btreeset! {1,2,3}];
     let no_quorum = vec![BTreeSet::new(), btreeset! {1,2,3}];
 
-    // An empty joint accepts every candidate set, including the empty set.
-    // The empty set intersects nothing, so an empty joint has quorum
-    // intersection only with a joint that has no quorum: one that holds an
-    // empty config.
-    assert_eq!(Some(false), empty.intersects_with(&j123));
-    assert_eq!(Some(false), j123.intersects_with(&empty));
-    assert_eq!(Some(false), empty.intersects_with(&empty));
+    // An empty joint accepts no candidate set. It has no quorum, so it has
+    // quorum intersection with every joint.
+    let empty_with_j123 = empty.intersects_with(&j123);
+    assert_eq!(Some(true), empty_with_j123);
+    let j123_with_empty = j123.intersects_with(&empty);
+    assert_eq!(Some(true), j123_with_empty);
+    let empty_with_empty = empty.intersects_with(&empty);
+    assert_eq!(Some(true), empty_with_empty);
 
     let empty_with_no_quorum = empty.intersects_with(&no_quorum);
     assert_eq!(Some(true), empty_with_no_quorum);
@@ -102,10 +103,11 @@ fn test_verify_intersection_empty_joint() {
     let empty: Vec<BTreeSet<u64>> = vec![];
     let j123 = vec![btreeset! {1, 2, 3}];
 
-    // An empty joint accepts the empty set as a quorum, and the empty set
-    // intersects nothing.
-    assert!(!verify_intersection(&empty, &j123));
-    assert!(!verify_intersection(&empty, &empty));
+    // An empty joint has no quorum, so no quorum pair can be disjoint.
+    let empty_with_j123 = verify_intersection(&empty, &j123);
+    assert!(empty_with_j123);
+    let empty_with_empty = verify_intersection(&empty, &empty);
+    assert!(empty_with_empty);
 }
 
 #[test]
@@ -228,10 +230,9 @@ fn test_joint_intersects_with_config() {
     let no_config_intersects = j123_145.intersects_with(&s2345);
     assert_eq!(None, no_config_intersects);
 
-    // The empty set is a quorum of an empty joint. It misses every majority of {1,2,3}, and an
-    // empty config has no quorum to miss.
+    // An empty joint has no quorum, so it has quorum intersection with every config.
     let empty_joint_with_config = empty_joint.intersects_with(&s123);
-    assert_eq!(Some(false), empty_joint_with_config);
+    assert_eq!(Some(true), empty_joint_with_config);
     let empty_joint_with_empty_config = empty_joint.intersects_with(&empty_config);
     assert_eq!(Some(true), empty_joint_with_empty_config);
 

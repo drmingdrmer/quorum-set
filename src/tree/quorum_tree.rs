@@ -24,8 +24,8 @@ mod impl_display;
 ///
 /// - A [`QuorumTree`] represents exactly one quorum rule.
 /// - Child nodes are unique and traversal order is deterministic according to [`Node`] ordering.
-/// - `quorum_size` never exceeds the number of child nodes: construction rejects duplicate children
-///   and unsatisfiable quorum sizes.
+/// - `quorum_size` is at least `1` and never exceeds the number of child nodes: construction
+///   rejects duplicate children, a zero quorum size, and unsatisfiable quorum sizes.
 /// - Equality and ordering for [`QuorumTree`] are based only on its canonical ID.
 /// - Canonical IDs are stable identifiers. [`std::fmt::Display`] is human-readable output and is
 ///   not a serialization format.
@@ -45,7 +45,6 @@ where ID: Ord
     ///
     /// `quorum_size` is the number of child nodes that must be selected for this
     /// tree to be selected. A child can be a single ID or another quorum tree.
-    /// If `quorum_size` is `0`, every input satisfies the tree.
     ///
     /// # Errors
     ///
@@ -53,6 +52,8 @@ where ID: Ord
     ///   is always an upstream bug; a tree never contains the same child twice.
     /// - [`QuorumTreeError::UnsatisfiableQuorum`]: `quorum_size` exceeds the number of child nodes,
     ///   so no input could satisfy the tree.
+    /// - [`QuorumTreeError::ZeroQuorumSize`]: `quorum_size` is `0`, so every input, even an empty
+    ///   one, would satisfy the tree.
     ///
     /// # Examples
     ///
@@ -265,5 +266,12 @@ mod tests {
             },
             err
         );
+    }
+
+    #[test]
+    fn test_new_rejects_zero_quorum_size() {
+        let err = QuorumTree::new(0, [id(1), id(2)]).unwrap_err();
+
+        assert_eq!(QuorumTreeError::ZeroQuorumSize, err);
     }
 }

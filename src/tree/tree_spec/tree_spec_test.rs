@@ -79,12 +79,9 @@ fn assert_quorum_matches_raft_joint(
 
 #[test]
 fn test_0_nodes_quorum_0() {
-    let qset = qset(0, &[]);
+    let err = QuorumTreeSpec::<u64>::new(0, []).unwrap_err();
 
-    assert_eq!(0, qset.quorum_size());
-
-    assert!(qset.is_quorum(&[]));
-    assert!(qset.is_quorum(&[1]));
+    assert_eq!(QuorumTreeError::ZeroQuorumSize, err);
 }
 
 #[test]
@@ -102,13 +99,9 @@ fn test_0_nodes_quorum_1() {
 
 #[test]
 fn test_3_nodes_quorum_0() {
-    let qset = qset(0, &[1, 2, 3]);
+    let err = QuorumTreeSpec::new(0, [id(1), id(2), id(3)]).unwrap_err();
 
-    assert_eq!(0, qset.quorum_size());
-
-    assert!(qset.is_quorum(&[]));
-    assert!(qset.is_quorum(&[1]));
-    assert!(qset.is_quorum(&[1, 2, 3]));
+    assert_eq!(QuorumTreeError::ZeroQuorumSize, err);
 }
 
 #[test]
@@ -235,7 +228,7 @@ fn test_joint() {
 
 #[test]
 fn test_is_quorum_is_monotonic() {
-    assert_is_quorum_monotonic(&qset(0, &[1, 2, 3]), &[1, 2, 3]);
+    assert_is_quorum_monotonic(&qset(1, &[1, 2, 3]), &[1, 2, 3]);
     assert_is_quorum_monotonic(&qset(2, &[1, 2, 3]), &[1, 2, 3]);
     assert_is_quorum_monotonic(&qset(4, &[1, 2, 3, 4]), &[1, 2, 3, 4]);
 

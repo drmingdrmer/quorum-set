@@ -44,8 +44,6 @@ fn test_empty_simple_quorum_set() -> anyhow::Result<()> {
     let empty: BTreeSet<u64> = btreeset! {};
 
     // An empty `BTreeSet` accepts no candidate set, not even the empty one.
-    // This is the documented contrast to an empty joint config, which accepts
-    // every candidate set.
     assert!(!empty.is_quorum(std::iter::empty()));
     assert!(!empty.is_quorum([1, 2].iter()));
     assert_eq!(btreeset! {}, empty.ids().collect());
@@ -109,7 +107,10 @@ fn test_joint_quorum_set_dedupes_candidate_ids() -> anyhow::Result<()> {
 fn test_empty_joint_quorum_set() -> anyhow::Result<()> {
     let qs: Vec<BTreeSet<u64>> = vec![];
 
-    assert!(qs.is_quorum([1].iter()));
+    // A joint with no member config has no voter, so it accepts no candidate
+    // set, the same as an empty `BTreeSet`.
+    assert!(!qs.is_quorum(std::iter::empty()));
+    assert!(!qs.is_quorum([1].iter()));
     assert_eq!(btreeset! {}, qs.ids().collect());
 
     Ok(())
@@ -119,7 +120,6 @@ fn test_empty_joint_quorum_set() -> anyhow::Result<()> {
 fn test_joint_quorum_set_with_empty_member_config() -> anyhow::Result<()> {
     // An empty member config accepts no candidate set, so the joint config
     // rejects everything, even when every other member config is satisfied.
-    // Only an empty `Vec` (no member config at all) is vacuously satisfied.
     let qs = vec![btreeset! {}, btreeset! {1,2,3}];
 
     assert!(!qs.is_quorum(std::iter::empty()));

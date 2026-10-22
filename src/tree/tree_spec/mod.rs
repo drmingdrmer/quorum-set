@@ -35,6 +35,10 @@ where ID: Ord
             }
         }
 
+        if quorum_size == 0 {
+            return Err(QuorumTreeError::ZeroQuorumSize);
+        }
+
         if quorum_size > unique.len() as u64 {
             return Err(QuorumTreeError::UnsatisfiableQuorum {
                 quorum_size,
@@ -62,9 +66,6 @@ where ID: Ord
         I: IntoIterator<Item = &'a ID> + Clone,
     {
         let required = self.quorum_size();
-        if required == 0 {
-            return true;
-        }
 
         let mut count = 0;
         for node in &self.nodes {
