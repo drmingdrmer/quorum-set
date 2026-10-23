@@ -20,3 +20,4 @@ pub use tree::QuorumTreeError;
 mod progress;
 mod quorum;
 mod tree;
+pub(crate) mod utils;

@@ -21,7 +21,7 @@ exclude = [".github", ".gitignore", "Makefile", "rust-toolchain", "rustfmt.toml"
 bench = false
 
 [dependencies]
-sha2 = { version = "0.10" }
+sha2 = { version = "0.11" }
 validit = { version = "0.2.6", default-features = false }
 
 [dev-dependencies]
