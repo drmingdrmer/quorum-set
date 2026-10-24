@@ -25,6 +25,17 @@ where ID: Ord + Clone
             vec![other]
         }
     }
+
+    /// Return the configs of `self` followed by `other`. Return an empty joint when `self` is
+    /// empty: an empty joint has no quorum, so a joint with it has no quorum either.
+    fn joint_with(&self, other: BTreeSet<ID>) -> Self {
+        if self.is_empty() {
+            return vec![];
+        }
+        let mut joint = self.clone();
+        joint.push(other);
+        joint
+    }
 }
 
 /// Builds an intermediate joint quorum set for a target joint config.
@@ -51,5 +62,17 @@ where ID: Ord + Clone
         } else {
             other
         }
+    }
+
+    /// Return the configs of `self` followed by the configs of `other`. Return an empty joint
+    /// when `self` or `other` is empty: an empty joint has no quorum, so a joint with it has no
+    /// quorum either.
+    fn joint_with(&self, other: Vec<BTreeSet<ID>>) -> Self {
+        if self.is_empty() || other.is_empty() {
+            return vec![];
+        }
+        let mut joint = self.clone();
+        joint.extend(other);
+        joint
     }
 }
