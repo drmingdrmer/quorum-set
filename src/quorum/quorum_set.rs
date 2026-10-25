@@ -3,9 +3,13 @@ use std::sync::Arc;
 #[cfg(doc)]
 use crate::BothQuorums;
 #[cfg(doc)]
+use crate::Joint;
+#[cfg(doc)]
 use crate::QuorumTree;
 #[cfg(doc)]
 use crate::ReadOrBoth;
+#[cfg(doc)]
+use crate::ThresholdQuorumSet;
 #[cfg(doc)]
 use crate::VecProgress;
 #[cfg(doc)]
@@ -29,8 +33,9 @@ use crate::verify_intersection;
 ///   quorum. An upward-closed rule that accepted the empty input would accept every input, so a
 ///   read or write operation would succeed without contacting any node.
 ///
-/// The crate provides implementations for flat majority sets, joint quorum sets, hierarchical
-/// [`QuorumTree`] rules, and [`BothQuorums`], which requires both a read and a write quorum.
+/// The crate provides implementations for flat majority sets, joint quorum sets,
+/// [`ThresholdQuorumSet`] rules, [`Joint`] rules over any rule type, hierarchical [`QuorumTree`]
+/// rules, and [`BothQuorums`], which requires both a read and a write quorum.
 /// [`ReadOrBoth`] holds either a read rule alone or a [`BothQuorums`].
 pub trait QuorumSet {
     /// Node ID type in this quorum set.

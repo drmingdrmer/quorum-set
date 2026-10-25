@@ -11,10 +11,12 @@ The `QuorumSet`, `QuorumIntersection`, and `QuorumBridge` traits and the
 
 The shared abstraction is `QuorumSet`: given candidate node IDs, it answers
 whether those IDs form a quorum and exposes the full voter ID set. The crate
-ships five implementations:
+ships seven implementations:
 
 - `BTreeSet<ID>`: a flat majority quorum.
 - `Vec<BTreeSet<ID>>`: a joint quorum, accepted only when every member config accepts.
+- `ThresholdQuorumSet<ID>`: a flat quorum of at least `quorum_size` IDs.
+- `Joint<Q>`: a joint of rules of any type, accepted only when every rule accepts.
 - `QuorumTree<ID>`: a hierarchical quorum built from nested `Node` values.
 - `BothQuorums<R, W>`: a read rule and a write rule, accepted only when both accept.
 - `ReadOrBoth<R, W>`: either the read rule alone or `BothQuorums<R, W>`, chosen at runtime.
@@ -267,7 +269,8 @@ config of the other, gives the exact answer when either joint is empty, and
 answers `None` for every other pair. Anything other than `Some(true)` means moving
 through a joint bridge is the safe path. `verify_intersection` computes the
 exact relation for any two quorum sets, including a read tree against a write
-tree.
+tree. The `ThresholdQuorumSet` implementation is exact like the flat-config one,
+and `Joint` answers by the joint-config rules for rules of any type.
 
 ## Canonical IDs
 
