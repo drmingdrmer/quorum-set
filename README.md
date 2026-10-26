@@ -254,10 +254,9 @@ assert_eq!(&5, progress.quorum_accepted());
 
 ## Quorum Intersection
 
-Consensus membership changes need every quorum in one membership to intersect
-every quorum in the next. `QuorumIntersection` checks that relation for joint
-configurations, and `QuorumBridge` builds the intermediate joint config used
-when moving between memberships.
+`QuorumIntersection` checks whether every quorum of one rule intersects every
+quorum of another. `QuorumBridge::joint_with` combines rules into a joint that
+requires a quorum of each input.
 
 `intersects_with` returns `Option<bool>` because an implementation may use a
 condition that is sufficient but not necessary. `Some(true)` proves the
@@ -266,9 +265,11 @@ neither. The flat-config implementation is exact and always answers `Some`.
 The joint-config implementation returns that exact answer for two uniform
 joints, proves `Some(true)` when some config of one joint intersects some
 config of the other, gives the exact answer when either joint is empty, and
-answers `None` for every other pair. Anything other than `Some(true)` means moving
-through a joint bridge is the safe path. `verify_intersection` computes the
-exact relation for any two quorum sets, including a read tree against a write
+answers `None` for every other pair. A read/write membership change can join the
+old and new read rules and separately join the old and new write rules with
+`joint_with`. When each membership has read/write quorum intersection, the
+joint keeps cross-intersection with both memberships. `verify_intersection`
+computes the exact relation for any two quorum sets, including a read tree against a write
 tree. The `ThresholdQuorumSet` implementation is exact like the flat-config one,
 and `Joint` answers by the joint-config rules for rules of any type.
 

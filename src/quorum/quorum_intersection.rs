@@ -39,10 +39,9 @@ where
     ///   but not necessary, so failing that condition tells the caller nothing about the true
     ///   relation.
     ///
-    /// Callers can act on `Some(true)`. On `Some(false)` and on `None` they
-    /// must take the unconditionally safe path, e.g. bridge through a joint
-    /// config built by [`QuorumBridge`]. [`verify_intersection`] computes the
-    /// exact relation in exponential time.
+    /// Callers can act on `Some(true)`. On `Some(false)` or `None`, they need another proof of
+    /// transition safety. [`QuorumBridge::joint_with`] builds the joint used by read/write
+    /// membership changes. [`verify_intersection`] computes the exact relation in exponential time.
     fn intersects_with(&self, other: &Other) -> Option<bool>;
 }
 

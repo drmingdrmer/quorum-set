@@ -26,12 +26,6 @@ fn all_joints() -> Vec<Joint<ThresholdQuorumSet<u64>>> {
     joints
 }
 
-/// Any two quorums of a rule intersect when its `quorum_size` is more than half of its IDs.
-fn intersects_itself(rule: &ThresholdQuorumSet<u64>) -> bool {
-    let id_count = rule.id_set().len() as u64;
-    2 * rule.quorum_size() > id_count
-}
-
 #[test]
 fn test_joint_of_thresholds() {
     let old = threshold(2, btreeset! {1, 2, 3});
@@ -163,59 +157,6 @@ fn test_joint_with_accepts_quorums_of_both_sides() {
                     "{current:?} joint with {goal:?} on {ids:?}"
                 );
             }
-        }
-    }
-}
-
-#[test]
-fn test_bridge_to() {
-    let r1 = || threshold(2, btreeset! {1, 2, 3});
-    let r2 = || threshold(2, btreeset! {3, 4, 5});
-    let r3 = || threshold(2, btreeset! {7, 8, 9});
-
-    let j1 = Joint::new([r1()]);
-    let j2 = Joint::new([r2()]);
-    let j3 = Joint::new([r3()]);
-    let j12 = Joint::new([r1(), r2()]);
-    let j23 = Joint::new([r2(), r3()]);
-
-    let bridge = j1.bridge_to(j1.clone());
-    assert_eq!(j1, bridge);
-    let bridge = j1.bridge_to(j2.clone());
-    assert_eq!(j12, bridge);
-    let bridge = j12.bridge_to(j1.clone());
-    assert_eq!(j1, bridge);
-    let bridge = j12.bridge_to(j2.clone());
-    assert_eq!(j2, bridge);
-    let bridge = j12.bridge_to(j3);
-    assert_eq!(j23, bridge);
-
-    // Every quorum of 2 of {1,2,3} intersects every quorum of 3 of {1,2,3,4}, so the bridge is the
-    // target alone.
-    let grown_rule = threshold(3, btreeset! {1, 2, 3, 4});
-    let grown = Joint::new([grown_rule]);
-    let bridge = j1.bridge_to(grown.clone());
-    assert_eq!(grown, bridge);
-}
-
-#[test]
-fn test_bridge_to_preserves_intersection_of_self_intersecting_rules() {
-    let mut joints = all_joints();
-    joints.retain(|joint| joint.rules().iter().all(intersects_itself));
-
-    for current in &joints {
-        for goal in &joints {
-            let bridge = current.bridge_to(goal.clone());
-            let current_to_bridge = verify_intersection(current, &bridge);
-            assert!(
-                current_to_bridge,
-                "{current:?} must intersect its bridge {bridge:?}"
-            );
-            let bridge_to_goal = verify_intersection(&bridge, goal);
-            assert!(
-                bridge_to_goal,
-                "bridge {bridge:?} must intersect its goal {goal:?}"
-            );
         }
     }
 }

@@ -131,38 +131,12 @@ where
     }
 }
 
-/// Builds an intermediate joint for a target joint.
-///
-/// The result is the target alone when [`QuorumIntersection::intersects_with`] proves that every
-/// quorum of `self` intersects every quorum of the target. Otherwise it is the joint of the last
-/// rule of `self` and the rules of the target.
-///
-/// The result `X` of [`bridge_to()`](QuorumBridge::bridge_to) keeps `self ~ X ~ other` when any
-/// two quorums of each rule intersect, as they do for a majority rule. Other rules may lose it:
-/// "1 of {1,2,3}" has the disjoint quorums `{1}` and `{2}`, so a bridge through it does not
-/// intersect it. [`joint_with()`](QuorumBridge::joint_with) has no such limit.
-///
-/// A Raft-style caller that applies a target-alone result must first commit an entry of the
-/// leader's own term. Otherwise two leaders of different terms can each move from the same
-/// committed config to a different target, and the two targets can have disjoint quorums.
+/// Builds the joint of the source and target rules.
 impl<Q> QuorumBridge<Joint<Q>> for Joint<Q>
 where
-    Q: QuorumIntersection<Q> + Clone,
+    Q: QuorumSet + Clone,
     Q::Id: Ord,
 {
-    fn bridge_to(&self, other: Joint<Q>) -> Self {
-        let intersects = self.intersects_with(&other);
-        if intersects == Some(true) {
-            other
-        } else if let Some(last) = self.rules.last() {
-            let mut rules = vec![last.clone()];
-            rules.extend(other.rules);
-            Self { rules }
-        } else {
-            other
-        }
-    }
-
     /// Return the rules of `self` followed by the rules of `other`. Return an empty joint when
     /// `self` or `other` is empty: an empty joint has no quorum, so a joint with it has no quorum
     /// either.
