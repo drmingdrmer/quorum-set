@@ -13,6 +13,8 @@ mod quorum_set;
 mod quorum_set_impl;
 mod read_or_both;
 mod threshold_quorum_set;
+mod weighted_quorum_set;
+mod weighted_quorum_set_error;
 
 #[cfg(test)]
 mod joint_test;
@@ -23,7 +25,11 @@ mod quorum_intersection_test;
 #[cfg(test)]
 mod quorum_set_test;
 #[cfg(test)]
+mod testing;
+#[cfg(test)]
 mod threshold_quorum_set_test;
+#[cfg(test)]
+mod weighted_quorum_set_test;
 
 pub use both_quorums::BothQuorums;
 pub use joint::Joint;
@@ -33,3 +39,5 @@ pub use quorum_intersection::verify_intersection;
 pub use quorum_set::QuorumSet;
 pub use read_or_both::ReadOrBoth;
 pub use threshold_quorum_set::ThresholdQuorumSet;
+pub use weighted_quorum_set::WeightedQuorumSet;
+pub use weighted_quorum_set_error::WeightedQuorumSetError;
