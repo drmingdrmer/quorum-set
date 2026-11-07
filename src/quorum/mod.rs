@@ -7,6 +7,8 @@ mod both_quorums;
 mod explicit_quorum_set;
 mod grid_quorum_set;
 mod grid_quorum_set_error;
+mod hierarchical_quorum_set;
+mod hierarchical_quorum_set_error;
 mod joint;
 mod quorum_bridge;
 mod quorum_bridge_impl;
@@ -23,6 +25,8 @@ mod weighted_quorum_set_error;
 mod explicit_quorum_set_test;
 #[cfg(test)]
 mod grid_quorum_set_test;
+#[cfg(test)]
+mod hierarchical_quorum_set_test;
 #[cfg(test)]
 mod joint_test;
 #[cfg(test)]
@@ -43,6 +47,9 @@ pub use explicit_quorum_set::ExplicitQuorumSet;
 pub use grid_quorum_set::GridQuorumSet;
 pub use grid_quorum_set::GridRule;
 pub use grid_quorum_set_error::GridQuorumSetError;
+pub use hierarchical_quorum_set::Group;
+pub use hierarchical_quorum_set::HierarchicalQuorumSet;
+pub use hierarchical_quorum_set_error::HierarchicalQuorumSetError;
 pub use joint::Joint;
 pub use quorum_bridge::QuorumBridge;
 pub use quorum_intersection::QuorumIntersection;
