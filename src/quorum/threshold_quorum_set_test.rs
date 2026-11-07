@@ -141,3 +141,52 @@ fn test_intersects_with_agrees_with_verify_intersection() {
         }
     }
 }
+
+#[test]
+fn test_dual() {
+    // A rule that needs 2 of 5 IDs has a dual that needs 4 of them, over the same ID set.
+    let rule = threshold(2, btreeset! {1, 2, 3, 4, 5});
+    let dual = rule.dual().unwrap();
+    assert_eq!(4, dual.quorum_size());
+    let shared = Arc::ptr_eq(rule.id_set(), dual.id_set());
+    assert!(shared);
+
+    // The dual of the dual is the rule again.
+    let dual_of_dual = dual.dual().unwrap();
+    assert_eq!(rule, dual_of_dual);
+
+    // A rule with no quorum has no dual.
+    let no_quorum = threshold(6, btreeset! {1, 2, 3, 4, 5});
+    assert_eq!(None, no_quorum.dual());
+    let no_id = threshold(1, btreeset! {});
+    assert_eq!(None, no_id.dual());
+}
+
+#[test]
+fn test_dual_accepts_exactly_the_sets_that_meet_every_quorum() {
+    let ids = btreeset! {1, 2, 3, 4};
+    let subsets = all_subsets(&ids);
+
+    for rule in all_thresholds(&ids) {
+        let Some(dual) = rule.dual() else {
+            // Only a rule with no quorum has no dual.
+            let no_quorum = rule.quorum_size() > rule.id_set().len() as u64;
+            assert!(no_quorum, "{rule:?}");
+            continue;
+        };
+
+        let quorums: Vec<&BTreeSet<u64>> =
+            subsets.iter().filter(|subset| rule.is_quorum(subset.iter())).collect();
+        for subset in &subsets {
+            let meets_every_quorum = quorums.iter().all(|quorum| !quorum.is_disjoint(subset));
+            let accepts = dual.is_quorum(subset.iter());
+            assert_eq!(
+                meets_every_quorum, accepts,
+                "rule={rule:?}, subset={subset:?}"
+            );
+        }
+
+        let intersects = rule.intersects_with(&dual);
+        assert_eq!(Some(true), intersects, "{rule:?}");
+    }
+}

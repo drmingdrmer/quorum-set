@@ -9,8 +9,9 @@ use crate::quorum::QuorumSet;
 /// A quorum rule that accepts an ID set holding at least `quorum_size` of its IDs.
 ///
 /// A read rule and a write rule over the same voters can share one ID set: build both from one
-/// [`Arc`]. Two rules over the same IDs have quorum intersection exactly when the sum of their
-/// quorum sizes exceeds the number of IDs.
+/// [`Arc`], or build the read rule from the write rule with [`dual()`](Self::dual). Two rules over
+/// the same IDs have quorum intersection exactly when the sum of their quorum sizes exceeds the
+/// number of IDs.
 ///
 /// # Examples
 ///
@@ -61,6 +62,46 @@ impl<ID> ThresholdQuorumSet<ID> {
     /// Returns the number of IDs that an accepted set must hold.
     pub fn quorum_size(&self) -> u64 {
         self.quorum_size.get()
+    }
+
+    /// Returns the rule over the same IDs that accepts exactly the sets that meet every quorum of
+    /// `self`. It shares the [`Arc`] of IDs with `self`.
+    ///
+    /// A set meets every quorum of a rule that needs `quorum_size` of `n` IDs exactly when it holds
+    /// at least `n + 1 - quorum_size` of them, so the dual needs that many. It is the threshold
+    /// rule over these IDs with the smallest quorum size that intersects `self`, so it fits as the
+    /// read rule of a write rule `self`. The dual of the dual is `self` again.
+    ///
+    /// Returns `None` when `quorum_size` exceeds the number of IDs. Such a rule has no quorum, so
+    /// every set meets all of its quorums, the empty set included, and no `ThresholdQuorumSet`
+    /// accepts the empty set.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::collections::BTreeSet;
+    /// use std::num::NonZeroU64;
+    /// use std::sync::Arc;
+    ///
+    /// use quorum_set::{QuorumIntersection, ThresholdQuorumSet};
+    ///
+    /// // A write quorum needs 2 of 5 IDs, so a read quorum needs 4 of them.
+    /// let two = NonZeroU64::new(2).unwrap();
+    /// let write = ThresholdQuorumSet::new(two, BTreeSet::from([1, 2, 3, 4, 5]));
+    /// let read = write.dual().unwrap();
+    /// assert_eq!(4, read.quorum_size());
+    ///
+    /// let shared = Arc::ptr_eq(write.id_set(), read.id_set());
+    /// assert!(shared);
+    /// let intersects = read.intersects_with(&write);
+    /// assert_eq!(Some(true), intersects);
+    /// ```
+    pub fn dual(&self) -> Option<Self> {
+        let id_count = self.ids.len() as u64;
+        let spare = id_count.checked_sub(self.quorum_size())?;
+        let quorum_size = NonZeroU64::MIN.saturating_add(spare);
+        let ids = Arc::clone(&self.ids);
+        Some(Self { ids, quorum_size })
     }
 }
 
