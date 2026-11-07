@@ -13,6 +13,8 @@ pub use quorum::QuorumIntersection;
 pub use quorum::QuorumSet;
 pub use quorum::ReadOrBoth;
 pub use quorum::ThresholdQuorumSet;
+pub use quorum::WeightedQuorumSet;
+pub use quorum::WeightedQuorumSetError;
 pub use quorum::verify_intersection;
 pub use tree::CanonicalId;
 pub use tree::Node;
