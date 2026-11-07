@@ -6,6 +6,48 @@ use std::fmt;
 use crate::quorum::QuorumSet;
 use crate::quorum::threshold_quorum_set_test::all_subsets;
 
+/// Returns every sequence of `len` distinct IDs from `ids`.
+pub(super) fn arrangements(ids: &[u64], len: usize) -> Vec<Vec<u64>> {
+    if len == 0 {
+        return vec![vec![]];
+    }
+
+    let mut sequences = vec![];
+    for (i, id) in ids.iter().enumerate() {
+        let mut rest = ids.to_vec();
+        rest.remove(i);
+        for tail in arrangements(&rest, len - 1) {
+            let mut sequence = vec![*id];
+            sequence.extend(tail);
+            sequences.push(sequence);
+        }
+    }
+    sequences
+}
+
+/// Returns every grid of at most 4 cells that holds distinct IDs of 1 to 4.
+pub(super) fn small_grids() -> Vec<Vec<Vec<u64>>> {
+    let shapes = [
+        (1, 1),
+        (1, 2),
+        (2, 1),
+        (1, 3),
+        (3, 1),
+        (1, 4),
+        (4, 1),
+        (2, 2),
+    ];
+    let mut grids = vec![];
+    for (row_count, column_count) in shapes {
+        for cells in arrangements(&[1, 2, 3, 4], row_count * column_count) {
+            let rows = cells.chunks(column_count);
+            let grid: Vec<Vec<u64>> = rows.map(|row| row.to_vec()).collect();
+            grids.push(grid);
+        }
+    }
+    grids
+}
+
 /// Returns the sets in `subsets` that `quorum_set` accepts, in their order.
 pub(super) fn accepted<Q>(quorum_set: &Q, subsets: &[BTreeSet<u64>]) -> Vec<BTreeSet<u64>>
 where Q: QuorumSet<Id = u64> {
@@ -32,6 +74,21 @@ pub(super) fn holding_one_of(
         }
     }
     holding
+}
+
+/// Returns the sets in `subsets` that share an ID with each of `sets`.
+pub(super) fn meeting_each_of(
+    sets: &[BTreeSet<u64>],
+    subsets: &[BTreeSet<u64>],
+) -> Vec<BTreeSet<u64>> {
+    let mut meeting = vec![];
+    for subset in subsets {
+        let meets_each = sets.iter().all(|set| !set.is_disjoint(subset));
+        if meets_each {
+            meeting.push(subset.clone());
+        }
+    }
+    meeting
 }
 
 /// Asserts the [`QuorumSet`] contract on every subset of the IDs of `quorum_set`: the empty set
