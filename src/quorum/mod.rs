@@ -4,6 +4,7 @@
 //! `{a,b}, {b,c}, {a,c}`.
 
 mod both_quorums;
+mod explicit_quorum_set;
 mod joint;
 mod quorum_bridge;
 mod quorum_bridge_impl;
@@ -16,6 +17,8 @@ mod threshold_quorum_set;
 mod weighted_quorum_set;
 mod weighted_quorum_set_error;
 
+#[cfg(test)]
+mod explicit_quorum_set_test;
 #[cfg(test)]
 mod joint_test;
 #[cfg(test)]
@@ -32,6 +35,7 @@ mod threshold_quorum_set_test;
 mod weighted_quorum_set_test;
 
 pub use both_quorums::BothQuorums;
+pub use explicit_quorum_set::ExplicitQuorumSet;
 pub use joint::Joint;
 pub use quorum_bridge::QuorumBridge;
 pub use quorum_intersection::QuorumIntersection;
